@@ -36,13 +36,9 @@ export async function POST(request: Request) {
   try {
     const result = await validateAndConsume({ scanner: user, eventId, gateId, qrPayload });
 
-    await logCheckinAttempt({
-      result,
-      scannerUserId: user.id,
-      eventId,
-      gateId,
-      deviceId,
-    });
+    // Fire-and-forget: the entry decision is made, and the volunteer should not
+    // wait a round-trip for the audit row to be written.
+    void logCheckinAttempt({ result, scannerUserId: user.id, eventId, gateId, deviceId });
 
     if (result.status === "APPROVED") {
       return ok({

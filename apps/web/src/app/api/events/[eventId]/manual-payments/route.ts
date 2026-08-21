@@ -6,7 +6,7 @@ import { sendMail, paymentReceivedEmail } from "@/lib/email";
 import { SUBMIT_MESSAGES, submitManualPayment } from "@/lib/manual-payment";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { storeUpload, UPLOAD_FAILURE_MESSAGES } from "@/lib/uploads";
-import { uuidSchema } from "@/lib/validation";
+import { attendeeDetailsSchema, uuidSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -41,6 +41,25 @@ export async function POST(request: Request, { params }: Params) {
     });
   }
 
+  // Same attendee rules as the free flow — validated, not trusted.
+  const attendeeResult = attendeeDetailsSchema.safeParse({
+    attendeeName: String(form.get("attendeeName") ?? ""),
+    attendeeEmail: String(form.get("attendeeEmail") ?? ""),
+    attendeePhone: String(form.get("attendeePhone") ?? ""),
+    attendeeRollNumber: String(form.get("attendeeRollNumber") ?? ""),
+    attendeeDepartment: String(form.get("attendeeDepartment") ?? ""),
+    acceptTerms: form.get("acceptTerms") === "true",
+  });
+
+  if (!attendeeResult.success) {
+    const fields: Record<string, string> = {};
+    for (const issue of attendeeResult.error.issues) {
+      const key = issue.path.join(".") || "_";
+      if (!fields[key]) fields[key] = issue.message;
+    }
+    return fail(422, "VALIDATION_FAILED", "Please correct the highlighted fields.", fields);
+  }
+
   const utrRaw = String(form.get("upiTransactionId") ?? "").trim();
   if (utrRaw.length > 40) {
     return fail(422, "VALIDATION_FAILED", "Check the reference number.", {
@@ -72,6 +91,13 @@ export async function POST(request: Request, { params }: Params) {
       ticketTypeId: ticketTypeResult.data,
       upiTransactionId: utrRaw || null,
       screenshotUploadId,
+      attendee: {
+        attendeeName: attendeeResult.data.attendeeName,
+        attendeeEmail: attendeeResult.data.attendeeEmail,
+        attendeePhone: attendeeResult.data.attendeePhone || null,
+        attendeeRollNumber: attendeeResult.data.attendeeRollNumber || null,
+        attendeeDepartment: attendeeResult.data.attendeeDepartment || null,
+      },
     });
 
     if (!result.ok) {

@@ -133,7 +133,10 @@ function FeaturedEvent({ event }: { event: EventRow }) {
             title={event.title}
             priority
             sizes="(max-width: 768px) 100vw, 50vw"
-            className="rounded-none md:h-full"
+            // From md up the poster stretches to the text column's height, so the
+            // fixed aspect ratio is dropped; `h-full` alone would resolve to 0
+            // against an auto-height grid row and the image would never load.
+            className="rounded-none md:aspect-auto md:min-h-[22rem]"
           />
 
           <div className="flex flex-col justify-center gap-4 p-6 sm:p-8">

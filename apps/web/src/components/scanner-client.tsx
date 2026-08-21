@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BrowserQRCodeReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
 import { Button, Card, cx } from "./ui";
 
@@ -14,9 +14,17 @@ type Outcome =
 
 type RecentScan = { at: number; label: string; approved: boolean };
 
-const RESET_MS = 2500;
-/** Ignore the same code re-read by the camera within this window. */
-const DUPLICATE_COOLDOWN_MS = 3000;
+const RESET_MS = 1400;
+/**
+ * How long the same code is ignored after it has been submitted once.
+ *
+ * Longer than RESET_MS on purpose: when the result clears, the attendee's QR is
+ * usually still in front of the lens. Without this the scanner would re-submit
+ * it the instant the panel disappeared, looping one ticket into many rejections.
+ * A deliberate re-scan is still possible after the window, or immediately via
+ * manual entry.
+ */
+const DUPLICATE_COOLDOWN_MS = 6000;
 
 export function ScannerClient({ events }: { events: ScannerEvent[] }) {
   const [eventId, setEventId] = useState(events[0]?.id ?? "");
@@ -28,6 +36,12 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
   const [recent, setRecent] = useState<RecentScan[]>([]);
   const [manualCode, setManualCode] = useState("");
   const [online, setOnline] = useState(true);
+
+  // The ZXing callback is created once and closes over the values of that
+  // render, so `busy`/`outcome` state is stale inside it. These refs are read
+  // live instead, and are the real guard against repeat submissions.
+  const processingRef = useRef(false);
+  const resultShownRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
@@ -72,18 +86,31 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
 
   const submit = useCallback(
     async (payload: string) => {
-      if (!eventId || busy) return;
+      if (!eventId || processingRef.current) return;
+      processingRef.current = true;
       setBusy(true);
 
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
 
-      let result: Outcome;
-      try {
-        const res = await fetch("/api/checkin/validate", {
+      // One silent retry: a single dropped request on venue wi-fi should not
+      // look like a rejected ticket to the volunteer.
+      const send = () =>
+        fetch("/api/checkin/validate", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ eventId, gateId, qrPayload: payload }),
+          keepalive: true,
         });
+
+      let result: Outcome;
+      try {
+        let res: Response;
+        try {
+          res = await send();
+        } catch {
+          res = await send();
+        }
+
         const data = await res.json().catch(() => ({}));
         result = res.ok
           ? (data as Outcome)
@@ -113,31 +140,80 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
       );
 
       setBusy(false);
+      processingRef.current = false;
+      // A result is on screen: ignore further decodes until it clears, so one
+      // QR held in front of the camera cannot produce a stream of results.
+      resultShownRef.current = true;
+
       // Clear automatically so the next attendee can step up without a tap.
-      resetTimerRef.current = setTimeout(() => setOutcome(null), RESET_MS);
+      resetTimerRef.current = setTimeout(() => {
+        setOutcome(null);
+        resultShownRef.current = false;
+        // lastCodeRef is deliberately kept: the same QR is probably still in
+        // frame, and must not be resubmitted the moment the panel clears.
+      }, RESET_MS);
     },
-    [busy, eventId, gateId, signal],
+    [eventId, gateId, signal],
   );
+
+  /** Manual dismiss shares the reset path so the guards cannot get stuck on. */
+  const clearResult = useCallback(() => {
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    setOutcome(null);
+    resultShownRef.current = false;
+  }, []);
 
   const stopCamera = useCallback(() => {
     controlsRef.current?.stop();
     controlsRef.current = null;
+    processingRef.current = false;
     setScanning(false);
   }, []);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
+    // Never leave a previous decode session running against a detached video.
+    controlsRef.current?.stop();
+    controlsRef.current = null;
     try {
-      const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
+      // QR-only reader: the multi-format one also tries Data Matrix, PDF417 and
+      // every 1D barcode on every frame, which is wasted work at a gate and
+      // makes each read noticeably slower.
+      const reader = new BrowserQRCodeReader(undefined, {
+        delayBetweenScanAttempts: 100,
+        delayBetweenScanSuccess: 100,
+      });
+
+      const controls = await reader.decodeFromConstraints(
+        {
+          audio: false,
+          video: {
+            // Rear camera, and enough resolution to read a phone screen at
+            // arm's length without hunting for focus.
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+          },
+        },
         videoRef.current ?? undefined,
         (decoded) => {
           if (!decoded) return;
+          // Read live refs, never captured state: this callback outlives the
+          // render that created it.
+          if (processingRef.current) return;
+
           const code = decoded.getText();
           const last = lastCodeRef.current;
-          // The camera reads continuously; do not resubmit the same code.
+
+          // The camera decodes every frame, so the same code must submit once
+          // per cooldown — this is what stops one QR becoming a burst.
           if (last && last.code === code && Date.now() - last.at < DUPLICATE_COOLDOWN_MS) return;
+
+          // A *different* ticket may interrupt a result still on screen: at a
+          // gate the next person should not wait out the reset timer.
+          if (resultShownRef.current) clearResult();
+
           lastCodeRef.current = { code, at: Date.now() };
           void submit(code);
         },
@@ -180,6 +256,22 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
         </div>
       ) : null}
 
+      {/* Always-visible banner: the single most common gate mistake is scanning
+          with the wrong event selected, and the dropdown is easy to overlook. */}
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-400">
+            Scanning for
+          </p>
+          <p className="truncate text-sm font-semibold text-slate-900">
+            {events.find((e) => e.id === eventId)?.title ?? "No event selected"}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-black/30 px-2.5 py-1 text-xs text-slate-700">
+          {gateId || "no gate"}
+        </span>
+      </div>
+
       <Card className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -214,70 +306,70 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
         </div>
       </Card>
 
-      {/* Result takes the whole screen on a phone: readable at arm's length. */}
-      {outcome ? (
-        <ResultPanel outcome={outcome} onDismiss={() => setOutcome(null)} />
-      ) : (
-        <Card className="space-y-3">
-          <div className="relative overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
-            <video
-              ref={videoRef}
-              className="aspect-square w-full object-cover"
-              muted
-              playsInline
-              aria-label="Camera preview"
-            />
-            {!scanning ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-6 text-center text-sm text-slate-700">
-                {busy ? "Checking…" : "Camera is off"}
-              </div>
-            ) : null}
-          </div>
+      {/* The result is an overlay, never a replacement: unmounting the <video>
+          would break the decode session while it kept reading the old stream,
+          which produced a burst of repeat results from a single QR. */}
+      {outcome ? <ResultPanel outcome={outcome} onDismiss={clearResult} /> : null}
 
-          <div className="flex gap-2">
-            {scanning ? (
-              <Button variant="secondary" onClick={stopCamera} className="flex-1">
-                Stop camera
-              </Button>
-            ) : (
-              <Button onClick={startCamera} className="flex-1">
-                Start camera
-              </Button>
-            )}
-          </div>
-
-          {cameraError ? (
-            <p role="alert" className="text-sm font-medium text-red-300">
-              {cameraError}
-            </p>
+      <Card className={cx("space-y-3", outcome && "hidden")}>
+        <div className="relative overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
+          <video
+            ref={videoRef}
+            className="aspect-square w-full object-cover"
+            muted
+            playsInline
+            aria-label="Camera preview"
+          />
+          {!scanning ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-6 text-center text-sm text-slate-700">
+              {busy ? "Checking…" : "Camera is off"}
+            </div>
           ) : null}
+        </div>
 
-          <form
-            className="flex gap-2 border-t border-white/8 pt-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const code = manualCode.trim();
-              if (!code) return;
-              setManualCode("");
-              void submit(code);
-            }}
-          >
-            <label htmlFor="manual" className="sr-only">
-              Enter ticket code manually
-            </label>
-            <input
-              id="manual"
-              value={manualCode}
-              onChange={(e) => setManualCode(e.target.value)}
-              placeholder="Paste ticket code (manual entry)"
-              className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25"
-            />
-            <Button type="submit" variant="secondary" disabled={busy}>
-              Check
+        <div className="flex gap-2">
+          {scanning ? (
+            <Button variant="secondary" onClick={stopCamera} className="flex-1">
+              Stop camera
             </Button>
-          </form>
-        </Card>
-      )}
+          ) : (
+            <Button onClick={startCamera} className="flex-1">
+              Start camera
+            </Button>
+          )}
+        </div>
+
+        {cameraError ? (
+          <p role="alert" className="text-sm font-medium text-red-300">
+            {cameraError}
+          </p>
+        ) : null}
+
+        <form
+          className="flex gap-2 border-t border-white/8 pt-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const code = manualCode.trim();
+            if (!code) return;
+            setManualCode("");
+            void submit(code);
+          }}
+        >
+          <label htmlFor="manual" className="sr-only">
+            Enter ticket code manually
+          </label>
+          <input
+            id="manual"
+            value={manualCode}
+            onChange={(e) => setManualCode(e.target.value)}
+            placeholder="Paste ticket code (manual entry)"
+            className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25"
+          />
+          <Button type="submit" variant="secondary" disabled={busy}>
+            Check
+          </Button>
+        </form>
+      </Card>
 
       <Card>
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">

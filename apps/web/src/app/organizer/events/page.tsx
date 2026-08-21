@@ -59,7 +59,7 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
         action={<ButtonLink href="/organizer/events/new">Create event</ButtonLink>}
       />
 
-      <nav aria-label="Filter by status" className="mb-5 flex flex-wrap gap-2">
+      <nav aria-label="Filter by status" className="-mx-1 mb-5 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">
         {FILTERS.map((filter) => {
           const active = (statusFilter ?? "") === filter.value;
           return (
@@ -68,7 +68,7 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
               href={filter.value ? `/organizer/events?status=${filter.value}` : "/organizer/events"}
               aria-current={active ? "page" : undefined}
               className={cx(
-                "rounded-full border px-3 py-1.5 text-sm transition-all duration-200",
+                "shrink-0 rounded-full border px-3 py-1.5 text-sm transition-all duration-200",
                 active
                   ? "border-brand-500 bg-brand-500 font-medium text-[#04231c]"
                   : "border-white/12 bg-white/[0.03] text-slate-700 hover:border-brand-500/50 hover:bg-brand-500/10 hover:text-brand-300",
@@ -109,7 +109,7 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
                   <EventStatusBadge status={event.status} />
                 </div>
 
-                <div className="flex flex-wrap gap-2 border-t border-white/8 pt-3">
+                <div className="-mx-1 flex gap-2 overflow-x-auto border-t border-white/8 px-1 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">
                   <ButtonLink href={`/organizer/events/${event.id}/edit`} variant="secondary">
                     Edit
                   </ButtonLink>
@@ -118,6 +118,9 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
                   </ButtonLink>
                   <ButtonLink href={`/organizer/events/${event.id}/payments`} variant="secondary">
                     Payments
+                  </ButtonLink>
+                  <ButtonLink href="/scanner" variant="secondary">
+                    Scanner
                   </ButtonLink>
                   <EventStatusActions eventId={event.id} status={event.status} />
                 </div>

@@ -33,6 +33,7 @@ export default async function PaymentsPage({ params }: Props) {
         createdAt: true,
         upiTransactionId: true,
         screenshotUploadId: true,
+        attendee: true,
         ticketType: { select: { name: true } },
         user: { select: { fullName: true, email: true, rollNumber: true } },
       },
@@ -62,9 +63,16 @@ export default async function PaymentsPage({ params }: Props) {
     upiTransactionId: payment.upiTransactionId,
     screenshotUploadId: payment.screenshotUploadId,
     payer: {
-      name: payment.user.fullName,
-      email: payment.user.email,
-      rollNumber: payment.user.rollNumber,
+      // Show the attendee named at payment, not just the account holder.
+      name:
+        (payment.attendee as { attendeeName?: string } | null)?.attendeeName ??
+        payment.user.fullName,
+      email:
+        (payment.attendee as { attendeeEmail?: string } | null)?.attendeeEmail ??
+        payment.user.email,
+      rollNumber:
+        (payment.attendee as { attendeeRollNumber?: string } | null)?.attendeeRollNumber ??
+        payment.user.rollNumber,
     },
   }));
 

@@ -29,6 +29,8 @@ export default async function TicketDetailPage({ params, searchParams }: Props) 
       issuedAt: true,
       checkedInAt: true,
       ownerUserId: true,
+      attendeeName: true,
+      attendeeRollNumber: true,
       owner: { select: { fullName: true, rollNumber: true } },
       event: { select: { id: true, title: true, venue: true, startsAt: true, endsAt: true } },
       ticketType: { select: { name: true, pricePaise: true, requiresStudentId: true } },
@@ -45,7 +47,7 @@ export default async function TicketDetailPage({ params, searchParams }: Props) 
   const qrPayload = generateQrPayload({ publicId: ticket.publicId, event: ticket.event });
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-xl pb-4">
       <PageHeader
         title={ticket.event.title}
         description={ticket.ticketType.name}
@@ -82,11 +84,11 @@ export default async function TicketDetailPage({ params, searchParams }: Props) 
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="font-medium text-slate-700">Attendee</dt>
-            <dd className="text-slate-600">{ticket.owner.fullName}</dd>
+            <dd className="text-slate-600">{ticket.attendeeName ?? ticket.owner.fullName}</dd>
           </div>
           <div>
             <dt className="font-medium text-slate-700">Roll number</dt>
-            <dd className="text-slate-600">{ticket.owner.rollNumber ?? "—"}</dd>
+            <dd className="text-slate-600">{ticket.attendeeRollNumber ?? ticket.owner.rollNumber ?? "—"}</dd>
           </div>
           <div>
             <dt className="font-medium text-slate-700">When</dt>

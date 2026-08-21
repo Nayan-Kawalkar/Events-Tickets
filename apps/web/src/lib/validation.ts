@@ -159,6 +159,33 @@ export const updateTicketTypeSchema = refineSalesWindow(
   }) as unknown as z.ZodObject<any>,
 );
 
+/**
+ * Details collected from the buyer at registration.
+ *
+ * Captured per ticket rather than read from the profile: a guest pass may name
+ * someone other than the account holder, and the organizer's attendee list must
+ * reflect what was given at purchase.
+ */
+export const attendeeDetailsSchema = z
+  .object({
+    attendeeName: z.string().trim().min(2, "Enter the attendee's full name").max(120),
+    attendeeEmail: emailSchema,
+    attendeePhone: z
+      .string()
+      .trim()
+      .regex(/^$|^[+]?[0-9 ()-]{7,20}$/, "Enter a valid phone number")
+      .optional()
+      .or(z.literal("")),
+    attendeeRollNumber: z.string().trim().max(40).optional().or(z.literal("")),
+    attendeeDepartment: z.string().trim().max(120).optional().or(z.literal("")),
+    acceptTerms: z.literal(true, {
+      errorMap: () => ({ message: "You must accept the event rules to register" }),
+    }),
+  })
+  .strict();
+
+export type AttendeeDetails = z.infer<typeof attendeeDetailsSchema>;
+
 export const uuidSchema = z.string().uuid("Invalid identifier");
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;

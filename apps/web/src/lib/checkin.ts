@@ -50,6 +50,41 @@ function reject(reason: RejectReason, extra?: { ticketId?: string; eventId?: str
 }
 
 /**
+ * Short-lived cache of the event being scanned.
+ *
+ * A gate scans one event for hours, so re-reading it on every scan spends a
+ * round-trip to say the same thing. Fifteen seconds is short enough that
+ * cancelling an event still reaches the gate almost immediately.
+ */
+type CachedEvent = { id: string; status: EventStatus; createdById: string; cachedAt: number };
+const EVENT_CACHE_MS = 15_000;
+const eventCache = new Map<string, CachedEvent>();
+
+async function loadEvent(eventId: string): Promise<CachedEvent | null> {
+  const hit = eventCache.get(eventId);
+  if (hit && Date.now() - hit.cachedAt < EVENT_CACHE_MS) return hit;
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, status: true, createdById: true },
+  });
+  if (!event) return null;
+
+  const entry: CachedEvent = { ...event, cachedAt: Date.now() };
+  eventCache.set(eventId, entry);
+  return entry;
+}
+
+type ConsumeRow = {
+  id: string;
+  attendeeName: string | null;
+  attendeeRollNumber: string | null;
+  ticketTypeName: string;
+  ownerFullName: string;
+  ownerRollNumber: string | null;
+};
+
+/**
  * Validate a scanned payload and consume the ticket.
  *
  * The consuming write is a single conditional UPDATE guarded on
@@ -72,10 +107,7 @@ export async function validateAndConsume(params: {
     return reject("INVALID", { eventId });
   }
 
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { id: true, status: true, createdById: true },
-  });
+  const event = await loadEvent(eventId);
   if (!event) return reject("NOT_AUTHORIZED_FOR_EVENT");
 
   // A scanner may only check people in at an event they are responsible for.
@@ -86,72 +118,102 @@ export async function validateAndConsume(params: {
     return reject("EVENT_NOT_LIVE", { eventId });
   }
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { publicId: verified.publicId },
-    select: { id: true, eventId: true, status: true },
-  });
-  if (!ticket) return reject("NOT_FOUND", { eventId });
-  if (ticket.eventId !== eventId) return reject("WRONG_EVENT", { ticketId: ticket.id, eventId });
-
   const now = new Date();
 
-  // The one write that matters. Only an ISSUED ticket can transition.
-  const consumed = await prisma.ticket.updateMany({
-    where: { id: ticket.id, eventId, status: TicketStatus.ISSUED },
-    data: {
-      status: TicketStatus.CHECKED_IN,
+  const rows = await prisma.$queryRaw<ConsumeRow[]>`
+    WITH updated AS (
+      UPDATE tickets
+      SET status = 'CHECKED_IN'::"TicketStatus",
+          "checkedInAt" = ${now},
+          "checkedInByUserId" = ${scanner.id}::uuid,
+          "checkedInGateId" = ${gateId}
+      WHERE "publicId" = ${verified.publicId}
+        AND "eventId" = ${eventId}::uuid
+        AND status = 'ISSUED'::"TicketStatus"
+      RETURNING id, "ticketTypeId", "ownerUserId", "attendeeName", "attendeeRollNumber"
+    )
+    SELECT u.id,
+           u."attendeeName",
+           u."attendeeRollNumber",
+           tt.name        AS "ticketTypeName",
+           o."fullName"   AS "ownerFullName",
+           o."rollNumber" AS "ownerRollNumber"
+    FROM updated u
+    JOIN ticket_types tt ON tt.id = u."ticketTypeId"
+    JOIN users o        ON o.id  = u."ownerUserId"
+  `;
+
+  const approved = rows[0];
+  if (approved) {
+    return {
+      status: "APPROVED",
+      message: "Entry allowed",
+      // Only what a volunteer needs to match the person in front of them. The
+      // gate checks the name on the ticket, which for a guest pass is not the
+      // account holder.
+      attendee: {
+        name: approved.attendeeName ?? approved.ownerFullName,
+        rollNumber: approved.attendeeRollNumber ?? approved.ownerRollNumber,
+        ticketType: approved.ticketTypeName,
+      },
       checkedInAt: now,
-      checkedInByUserId: scanner.id,
-      checkedInGateId: gateId,
-    },
-  });
-
-  if (consumed.count === 0) {
-    // Lost the race, or the ticket was never usable. Re-read to say which.
-    const current = await prisma.ticket.findUnique({
-      where: { id: ticket.id },
-      select: { status: true },
-    });
-
-    switch (current?.status) {
-      case TicketStatus.CHECKED_IN:
-        return reject("ALREADY_USED", { ticketId: ticket.id, eventId });
-      case TicketStatus.CANCELLED:
-        return reject("CANCELLED", { ticketId: ticket.id, eventId });
-      case TicketStatus.BLOCKED:
-        return reject("BLOCKED", { ticketId: ticket.id, eventId });
-      case TicketStatus.EXPIRED:
-        return reject("EXPIRED", { ticketId: ticket.id, eventId });
-      default:
-        return reject("INVALID", { ticketId: ticket.id, eventId });
-    }
+      ticketId: approved.id,
+      eventId,
+    };
   }
 
-  const details = await prisma.ticket.findUnique({
-    where: { id: ticket.id },
+  // Nothing was consumed. Only now pay for a read, to say precisely why.
+  return diagnose(scanner, eventId, verified.publicId);
+}
+
+/** Explain a failed consume. Runs only on the rejection path. */
+async function diagnose(
+  scanner: SessionUser,
+  eventId: string,
+  publicId: string,
+): Promise<CheckinResult> {
+  const ticket = await prisma.ticket.findUnique({
+    where: { publicId },
     select: {
-      owner: { select: { fullName: true, rollNumber: true } },
-      ticketType: { select: { name: true } },
+      id: true,
+      eventId: true,
+      status: true,
+      event: { select: { title: true, createdById: true } },
     },
   });
 
-  return {
-    status: "APPROVED",
-    message: "Entry allowed",
-    // Only what a volunteer needs to match the person in front of them.
-    attendee: {
-      name: details?.owner.fullName ?? "Attendee",
-      rollNumber: details?.owner.rollNumber ?? null,
-      ticketType: details?.ticketType.name ?? "Ticket",
-    },
-    checkedInAt: now,
-    ticketId: ticket.id,
-    eventId,
-  };
+  if (!ticket) return reject("NOT_FOUND", { eventId });
+
+  if (ticket.eventId !== eventId) {
+    // Naming the real event turns a dead end into a fix: at a gate this is
+    // almost always the scanner left on the wrong event, not a bad ticket.
+    const mayKnow = scanner.role === Role.ADMIN || ticket.event.createdById === scanner.id;
+    const rejection = reject("WRONG_EVENT", { ticketId: ticket.id, eventId });
+
+    return mayKnow
+      ? {
+          ...rejection,
+          message: `This ticket is for "${ticket.event.title}". Switch the scanner to that event.`,
+        }
+      : rejection;
+  }
+
+  switch (ticket.status) {
+    case TicketStatus.CHECKED_IN:
+      return reject("ALREADY_USED", { ticketId: ticket.id, eventId });
+    case TicketStatus.CANCELLED:
+      return reject("CANCELLED", { ticketId: ticket.id, eventId });
+    case TicketStatus.BLOCKED:
+      return reject("BLOCKED", { ticketId: ticket.id, eventId });
+    case TicketStatus.EXPIRED:
+      return reject("EXPIRED", { ticketId: ticket.id, eventId });
+    default:
+      return reject("INVALID", { ticketId: ticket.id, eventId });
+  }
 }
 
 /** Record the attempt. Never throws: logging must not fail an entry decision. */
-export async function logCheckinAttempt(params: {
+export function logCheckinAttempt(params: {
   result: CheckinResult;
   scannerUserId: string;
   eventId: string;
@@ -160,10 +222,10 @@ export async function logCheckinAttempt(params: {
 }) {
   const { result, scannerUserId, eventId, gateId, deviceId } = params;
 
-  try {
-    await prisma.checkinAttempt.create({
+  return prisma.checkinAttempt
+    .create({
       data: {
-        ticketId: result.status === "APPROVED" ? result.ticketId : (result.ticketId ?? null),
+        ticketId: result.ticketId ?? null,
         eventId,
         gateId,
         scannerUserId,
@@ -171,8 +233,11 @@ export async function logCheckinAttempt(params: {
         reason: result.status === "REJECTED" ? result.reason : null,
         deviceId: deviceId ?? null,
       },
-    });
-  } catch (err) {
-    console.error("[checkin] failed to log attempt", err);
-  }
+    })
+    .then(
+      () => undefined,
+      (err) => {
+        console.error("[checkin] failed to log attempt", err);
+      },
+    );
 }

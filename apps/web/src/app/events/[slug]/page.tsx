@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma, EventStatus, ManualPaymentStatus, PaymentMode } from "@ct/db";
 import { Poster } from "@/components/poster";
-import { RegisterButton } from "@/components/register-button";
 import { Alert, ButtonLink, Card, EventStatusBadge, PageHeader } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { formatDateTime, formatPrice } from "@/lib/format";
@@ -117,7 +116,8 @@ export default async function EventDetailPage({ params }: Props) {
 
     const held = heldByType.get(type.id) ?? 0;
     if (held >= type.maxPerUser) return held === 1 ? "You have this ticket" : "Limit reached";
-    if (type.requiresStudentId && !user?.rollNumber) return "Add your roll number to register";
+    // A missing profile roll number is NOT a refusal: student-only tickets ask
+    // for it on the registration form, which is also what the gate checks.
     return undefined;
   };
 
@@ -146,7 +146,7 @@ export default async function EventDetailPage({ params }: Props) {
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <div className="grid gap-6 md:grid-cols-[1.6fr_1fr] lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
           <Card>
             <h2 className="text-eyebrow">About</h2>
@@ -172,7 +172,7 @@ export default async function EventDetailPage({ params }: Props) {
 
                   return (
                     <li key={type.id}>
-                      <Card className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <Card className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="font-medium text-slate-900">{type.name}</p>
                           {type.description ? (
@@ -201,12 +201,14 @@ export default async function EventDetailPage({ params }: Props) {
                                   Pay by UPI
                                 </ButtonLink>
                               )
+                            ) : refusalFor(type) ? (
+                              <p className="text-sm font-medium text-slate-500" role="status">
+                                {refusalFor(type)}
+                              </p>
                             ) : (
-                              <RegisterButton
-                                eventId={event.id}
-                                ticketTypeId={type.id}
-                                disabledReason={refusalFor(type)}
-                              />
+                              <ButtonLink href={`/events/${slug}/register/${type.id}`}>
+                                Register
+                              </ButtonLink>
                             )
                           ) : (
                             <ButtonLink href={`/login?next=/events/${slug}`} variant="secondary">
@@ -256,11 +258,11 @@ export default async function EventDetailPage({ params }: Props) {
 
           {user && !user.rollNumber ? (
             <Alert tone="info">
-              Student-only tickets need a roll number on your profile.{" "}
-              <Link href="/dashboard" className="font-medium underline">
-                Add it now
-              </Link>
-              .
+              Student-only tickets ask for a roll number when you register. Save it to your{" "}
+              <Link href="/profile" className="font-medium underline">
+                profile
+              </Link>{" "}
+              to have it filled in automatically.
             </Alert>
           ) : null}
         </aside>

@@ -6,11 +6,11 @@ import { ok, fail, parseJson, sameOrigin, serverError, tooManyRequests, unauthor
 import { sendMail, ticketConfirmationEmail } from "@/lib/email";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { REJECTION_MESSAGES, registerForEvent } from "@/lib/registration";
-import { uuidSchema } from "@/lib/validation";
+import { attendeeDetailsSchema, uuidSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-const bodySchema = z.object({ ticketTypeId: uuidSchema }).strict();
+const bodySchema = attendeeDetailsSchema.extend({ ticketTypeId: uuidSchema }).strict();
 
 type Params = { params: Promise<{ eventId: string }> };
 
@@ -26,7 +26,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const parsed = await parseJson(request, bodySchema);
   if (!parsed.ok) return parsed.response;
-  const { ticketTypeId } = parsed.data;
+  const { ticketTypeId, ...attendee } = parsed.data;
 
   // Curb rapid repeat submissions (double-clicks, scripted grabs) per account and IP.
   const ip = await clientIp();
@@ -39,6 +39,13 @@ export async function POST(request: Request, { params }: Params) {
       { id: user.id, rollNumber: user.rollNumber },
       eventId,
       ticketTypeId,
+      {
+        attendeeName: attendee.attendeeName,
+        attendeeEmail: attendee.attendeeEmail,
+        attendeePhone: attendee.attendeePhone || null,
+        attendeeRollNumber: attendee.attendeeRollNumber || null,
+        attendeeDepartment: attendee.attendeeDepartment || null,
+      },
     );
 
     if (!result.ok) {

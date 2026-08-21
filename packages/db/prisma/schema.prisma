@@ -159,6 +159,21 @@ model Ticket {
   ownerUserId      String       @db.Uuid
   status           TicketStatus @default(ISSUED)
   qrVersion        Int          @default(1)
+
+  /// Attendee details captured at registration.
+  ///
+  /// A snapshot, not a link to the profile: the person at the gate is whoever
+  /// was named when the ticket was bought, and a later profile edit must not
+  /// rewrite the attendee list an organizer already printed. Nullable because
+  /// tickets issued before this existed have no snapshot — read them through
+  /// the owner as a fallback.
+  attendeeName       String?
+  attendeeEmail      String?
+  attendeePhone      String?
+  attendeeRollNumber String?
+  attendeeDepartment String?
+  termsAcceptedAt    DateTime? @db.Timestamptz(6)
+
   issuedAt         DateTime     @default(now()) @db.Timestamptz(6)
   checkedInAt      DateTime?    @db.Timestamptz(6)
   checkedInByUserId String?     @db.Uuid
@@ -255,6 +270,9 @@ model ManualPayment {
   amountPaise       Int
   /// UTR / reference number as typed by the student. Unverified text.
   upiTransactionId  String?
+  /// Attendee details captured with the payment, copied onto the ticket when
+  /// an organizer verifies it. JSON because this record is short-lived.
+  attendee          Json?
   screenshotUploadId String?            @db.Uuid
   status            ManualPaymentStatus @default(PENDING)
   verifiedByUserId  String?             @db.Uuid

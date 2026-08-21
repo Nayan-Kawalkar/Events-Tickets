@@ -43,6 +43,15 @@ export type RegistrationResult =
 
 type Actor = { id: string; rollNumber: string | null };
 
+/** Buyer-supplied details, stored on the ticket at issue time. */
+export type AttendeeSnapshot = {
+  attendeeName: string;
+  attendeeEmail: string;
+  attendeePhone?: string | null;
+  attendeeRollNumber?: string | null;
+  attendeeDepartment?: string | null;
+};
+
 /**
  * Register a user for one ticket of a given type.
  *
@@ -55,6 +64,7 @@ async function attemptRegistration(
   user: Actor,
   eventId: string,
   ticketTypeId: string,
+  attendee: AttendeeSnapshot,
 ): Promise<RegistrationResult> {
   return prisma.$transaction(
     async (tx): Promise<RegistrationResult> => {
@@ -86,7 +96,9 @@ async function attemptRegistration(
       // Until that phase lands, refuse rather than issue something for free.
       if (ticketType.pricePaise > 0) return { ok: false, reason: "PAID_NOT_SUPPORTED" };
 
-      if (ticketType.requiresStudentId && !user.rollNumber) {
+      // The roll number on the form is what counts: a guest pass may be bought
+      // by a student for someone else, and a student pass must name a student.
+      if (ticketType.requiresStudentId && !attendee.attendeeRollNumber && !user.rollNumber) {
         return { ok: false, reason: "STUDENT_ID_REQUIRED" };
       }
 
@@ -123,6 +135,12 @@ async function attemptRegistration(
           ownerUserId: user.id,
           status: TicketStatus.ISSUED,
           qrVersion: 1,
+          attendeeName: attendee.attendeeName,
+          attendeeEmail: attendee.attendeeEmail,
+          attendeePhone: attendee.attendeePhone || null,
+          attendeeRollNumber: attendee.attendeeRollNumber || user.rollNumber || null,
+          attendeeDepartment: attendee.attendeeDepartment || null,
+          termsAcceptedAt: new Date(),
         },
         select: { id: true, publicId: true },
       });
@@ -145,12 +163,13 @@ export async function registerForEvent(
   user: Actor,
   eventId: string,
   ticketTypeId: string,
+  attendee: AttendeeSnapshot,
 ): Promise<RegistrationResult> {
   const MAX_ATTEMPTS = 3;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      return await attemptRegistration(user, eventId, ticketTypeId);
+      return await attemptRegistration(user, eventId, ticketTypeId, attendee);
     } catch (err) {
       if (isSerializationFailure(err) && attempt < MAX_ATTEMPTS) {
         // Brief, growing backoff so the retries do not collide again immediately.

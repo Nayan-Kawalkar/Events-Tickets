@@ -3,8 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ACCOUNT_NAV, ORGANIZER_NAV, PRIMARY_NAV, isActive, titleForPath, visibleTo } from "@/lib/nav";
+import { LogOut, Menu, X } from "lucide-react";
+import {
+  ACCOUNT_NAV,
+  ORGANIZER_NAV,
+  PRIMARY_NAV,
+  excluding,
+  isActive,
+  titleForPath,
+  visibleTo,
+  type IconName,
+} from "@/lib/nav";
 import type { Role } from "@/lib/enums";
+import { NavIcon } from "./nav-icon";
 import { cx } from "./ui";
 
 type NavUser = { fullName: string; email: string; role: Role } | null;
@@ -24,7 +35,7 @@ export function PrimaryNav({ user }: { user: NavUser }) {
   const items = visibleTo(PRIMARY_NAV, user?.role ?? null);
 
   return (
-    <nav aria-label="Primary" className="hidden md:flex md:items-center md:gap-7">
+    <nav aria-label="Primary" className="hidden md:flex md:items-center md:gap-5 lg:gap-7">
       {items.map((item) => {
         const active = isActive(pathname, item.href);
         return (
@@ -79,6 +90,12 @@ export function UserMenu({ user }: { user: NonNullable<NavUser> }) {
     };
   }, [open]);
 
+  // Organizer tools belong in the dropdown too: the top bar has room for three
+  // primary links, and the scanner is otherwise unreachable on desktop.
+  const organizerItems = excluding(
+    visibleTo(ORGANIZER_NAV, user.role),
+    visibleTo(PRIMARY_NAV, user.role),
+  );
   const items = visibleTo(ACCOUNT_NAV, user.role);
 
   return (
@@ -107,23 +124,46 @@ export function UserMenu({ user }: { user: NonNullable<NavUser> }) {
             </p>
           </div>
 
-          {items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              role="menuitem"
-              className="block px-4 py-2.5 text-sm text-slate-700 transition-colors hover:bg-brand-500/10 hover:text-brand-300"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {organizerItems.length > 0 ? (
+            <div className="border-b border-white/8 py-1">
+              <p className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Organizer
+              </p>
+              {organizerItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  role="menuitem"
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 transition-colors hover:bg-brand-500/10 hover:text-brand-300"
+                >
+                  <NavIcon name={item.icon} className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="py-1">
+            {items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                role="menuitem"
+                className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 transition-colors hover:bg-brand-500/10 hover:text-brand-300"
+              >
+                <NavIcon name={item.icon} className="h-4 w-4 shrink-0" />
+                {item.label}
+              </Link>
+            ))}
+          </div>
 
           <form action="/api/auth/logout" method="post" className="border-t border-white/8">
             <button
               type="submit"
               role="menuitem"
-              className="w-full px-4 py-2.5 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10"
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10"
             >
+              <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
               Logout
             </button>
           </form>
@@ -168,7 +208,10 @@ export function MobileDrawer({ user }: { user: NavUser }) {
   }, [open]);
 
   const primary = visibleTo(PRIMARY_NAV, user?.role ?? null);
-  const organizer = visibleTo(ORGANIZER_NAV, user?.role ?? null);
+  const organizer = excluding(
+    visibleTo(ORGANIZER_NAV, user?.role ?? null),
+    primary,
+  );
   const account = visibleTo(ACCOUNT_NAV, user?.role ?? null);
 
   return (
@@ -180,9 +223,7 @@ export function MobileDrawer({ user }: { user: NavUser }) {
         aria-controls="mobile-drawer"
         className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/12 text-slate-800 transition-colors hover:border-brand-500/60 hover:text-brand-300 md:hidden"
       >
-        <span aria-hidden="true" className="text-lg leading-none">
-          ☰
-        </span>
+        <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
         <span className="sr-only">Open menu</span>
       </button>
 
@@ -218,9 +259,7 @@ export function MobileDrawer({ user }: { user: NavUser }) {
                 onClick={() => setOpen(false)}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-700 hover:text-brand-300"
               >
-                <span aria-hidden="true" className="text-xl leading-none">
-                  ×
-                </span>
+                <X className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
                 <span className="sr-only">Close menu</span>
               </button>
             </div>
@@ -238,8 +277,9 @@ export function MobileDrawer({ user }: { user: NavUser }) {
                 <form action="/api/auth/logout" method="post">
                   <button
                     type="submit"
-                    className="min-h-11 w-full rounded-lg border border-red-400/30 bg-red-500/10 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
+                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-400/30 bg-red-500/10 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
                   >
+                    <LogOut className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                     Logout
                   </button>
                 </form>
@@ -265,7 +305,7 @@ function DrawerGroup({
   pathname,
 }: {
   label?: string;
-  items: { href: string; label: string; icon: string }[];
+  items: { href: string; label: string; icon: IconName }[];
   pathname: string;
 }) {
   if (items.length === 0) return null;
@@ -291,9 +331,7 @@ function DrawerGroup({
                 : "text-slate-700 hover:bg-white/5 hover:text-slate-900",
             )}
           >
-            <span aria-hidden="true" className="w-5 text-center">
-              {item.icon}
-            </span>
+            <NavIcon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
             {item.label}
           </Link>
         );
@@ -306,13 +344,22 @@ function DrawerGroup({
 export function BottomNav({ user }: { user: NavUser }) {
   const pathname = usePathname();
 
-  const items = [
-    { href: "/", label: "Home", icon: "🏠" },
-    { href: "/tickets", label: "Tickets", icon: "🎫", authOnly: true },
-    { href: "/organizer/events/new", label: "Create", icon: "➕", organizerOnly: true },
-    { href: "/profile", label: "Profile", icon: "👤", authOnly: true },
-    { href: "/help", label: "More", icon: "☰" },
-  ].filter((item) => {
+  // Annotated before filtering, so `icon` keeps its IconName type.
+  const ALL: {
+    href: string;
+    label: string;
+    icon: IconName;
+    authOnly?: boolean;
+    organizerOnly?: boolean;
+  }[] = [
+    { href: "/", label: "Home", icon: "home" },
+    { href: "/tickets", label: "Tickets", icon: "ticket", authOnly: true },
+    { href: "/organizer/events/new", label: "Create", icon: "plus", organizerOnly: true },
+    { href: "/profile", label: "Profile", icon: "user", authOnly: true },
+    { href: "/help", label: "More", icon: "menu" },
+  ];
+
+  const items = ALL.filter((item) => {
     if (item.organizerOnly) return user?.role === "ORGANIZER" || user?.role === "ADMIN";
     if (item.authOnly) return Boolean(user);
     return true;
@@ -340,9 +387,11 @@ export function BottomNav({ user }: { user: NavUser }) {
                   active ? "text-brand-400" : "text-slate-600 hover:text-slate-800",
                 )}
               >
-                <span aria-hidden="true" className="text-lg leading-none">
-                  {item.icon}
-                </span>
+                <NavIcon
+                  name={item.icon}
+                  className="h-[22px] w-[22px]"
+                  strokeWidth={active ? 2.25 : 1.75}
+                />
                 <span className={active ? "font-semibold" : undefined}>{item.label}</span>
               </Link>
             </li>

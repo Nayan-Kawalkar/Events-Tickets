@@ -13,7 +13,7 @@ export default async function RegisterPage() {
   if (user) redirect("/dashboard");
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto w-full max-w-md">
       <h1 className="mb-2 font-display text-3xl font-normal tracking-tight">Create your account</h1>
       <p className="mb-6 text-sm text-slate-600">
         {allowedEmailDomains.length > 0

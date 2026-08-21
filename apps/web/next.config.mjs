@@ -12,11 +12,16 @@ try {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // A dev server and a production build cannot share one output directory.
+  // Set NEXT_DIST_DIR to build or run a second instance alongside `next dev`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   experimental: {
-    // Keep already-fetched pages in the client router cache, so Back and
-    // repeat visits render instantly instead of re-querying the database.
+    // Dynamic pages must NOT be cached in the client router: they show data an
+    // organizer just changed (a verified payment issuing a ticket, a published
+    // event). Caching them for even a few seconds makes the app look like the
+    // write was lost. Static pages are safe to hold.
     staleTimes: {
-      dynamic: 30,
+      dynamic: 0,
       static: 180,
     },
   },

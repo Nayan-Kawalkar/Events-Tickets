@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@ct/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, invalidateUserCache } from "@/lib/auth";
 import { ok, fail, parseJson, sameOrigin, serverError, unauthorized } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -43,6 +43,7 @@ export async function PATCH(request: Request) {
       select: { id: true, email: true, fullName: true, rollNumber: true, department: true, role: true },
     });
 
+    invalidateUserCache(user.id);
     return ok({ user: updated });
   } catch (err) {
     return serverError("update profile", err);

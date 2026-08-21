@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: Props) {
   const next = params.next?.startsWith("/") && !params.next.startsWith("//") ? params.next : "/dashboard";
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto w-full max-w-md">
       <h1 className="mb-6 font-display text-3xl font-normal tracking-tight">Sign in</h1>
 
       {params.signedOut ? (

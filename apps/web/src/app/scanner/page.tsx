@@ -21,7 +21,7 @@ export default async function ScannerPage() {
   });
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-md sm:max-w-lg">
       <PageHeader
         title="Gate scanner"
         description="Scan the attendee's QR. Each ticket admits one person, once."

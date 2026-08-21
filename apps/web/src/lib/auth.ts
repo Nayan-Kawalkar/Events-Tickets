@@ -33,10 +33,25 @@ export async function fakePasswordCheck() {
   await bcrypt.compare("dummy-password", DUMMY_HASH);
 }
 
-/** Current user, or null. Cached per request so multiple callers hit the DB once. */
+/**
+ * Short-lived cross-request cache of the signed-in user.
+ *
+ * `cache()` alone dedupes within one request; a gate scanning hundreds of
+ * tickets would still pay a user lookup per scan. Fifteen seconds keeps that
+ * off the critical path while bounding how long a role change or a deletion
+ * takes to bite — the same trade-off the scanner makes for the event row.
+ */
+type CachedUser = { user: SessionUser | null; cachedAt: number };
+const USER_CACHE_MS = 15_000;
+const userCache = new Map<string, CachedUser>();
+
+/** Current user, or null. Cached per request, and briefly across requests. */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const session = await readSession();
   if (!session) return null;
+
+  const hit = userCache.get(session.sub);
+  if (hit && Date.now() - hit.cachedAt < USER_CACHE_MS) return hit.user;
 
   const user = await prisma.user.findUnique({
     where: { id: session.sub },
@@ -50,8 +65,14 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     },
   });
 
+  userCache.set(session.sub, { user: user ?? null, cachedAt: Date.now() });
   return user ?? null;
 });
+
+/** Drop a user from the cache so a change applies on the very next request. */
+export function invalidateUserCache(userId: string) {
+  userCache.delete(userId);
+}
 
 /** Require a signed-in user in a page/layout, else redirect to login. */
 export async function requireUser(returnTo?: string): Promise<SessionUser> {

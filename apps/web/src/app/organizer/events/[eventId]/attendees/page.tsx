@@ -37,6 +37,10 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
       ...(q
         ? {
             OR: [
+              { attendeeName: { contains: q, mode: "insensitive" } },
+              { attendeeEmail: { contains: q, mode: "insensitive" } },
+              { attendeeRollNumber: { contains: q, mode: "insensitive" } },
+              { attendeePhone: { contains: q, mode: "insensitive" } },
               { owner: { fullName: { contains: q, mode: "insensitive" } } },
               { owner: { email: { contains: q, mode: "insensitive" } } },
               { owner: { rollNumber: { contains: q, mode: "insensitive" } } },
@@ -52,6 +56,10 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
       publicId: true,
       status: true,
       issuedAt: true,
+      attendeeName: true,
+      attendeeEmail: true,
+      attendeePhone: true,
+      attendeeRollNumber: true,
       owner: { select: { fullName: true, email: true, rollNumber: true } },
       ticketType: { select: { name: true } },
     },
@@ -75,7 +83,7 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
         }
       />
 
-      <form method="get" className="mb-5 flex gap-2" role="search">
+      <form method="get" className="mb-5 flex flex-wrap gap-2" role="search">
         <label htmlFor="q" className="sr-only">
           Search attendees
         </label>
@@ -84,7 +92,7 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
           name="q"
           defaultValue={q}
           placeholder="Search name, email, roll number or ticket ID"
-          className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25 max-w-md"
+          className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25 sm:max-w-md"
         />
         <button
           type="submit"
@@ -108,14 +116,15 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
           description={q ? undefined : "Tickets appear here once students register."}
         />
       ) : (
-        <Card className="overflow-x-auto p-0">
+        <Card className="hidden overflow-x-auto p-0 md:block" glow={false}>
           <table className="w-full min-w-[46rem] text-left text-sm">
             <caption className="sr-only">Attendees for {event.title}</caption>
-            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wider text-slate-600">
+            <thead className="sticky top-16 z-10 border-b border-white/10 bg-[#0b2a27] text-xs uppercase tracking-wider text-slate-600">
               <tr>
                 <th scope="col" className="px-4 py-3">Name</th>
                 <th scope="col" className="px-4 py-3">Email</th>
                 <th scope="col" className="px-4 py-3">Roll number</th>
+                <th scope="col" className="px-4 py-3">Phone</th>
                 <th scope="col" className="px-4 py-3">Ticket type</th>
                 <th scope="col" className="px-4 py-3">Status</th>
                 <th scope="col" className="px-4 py-3">Issued</th>
@@ -124,9 +133,10 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
             <tbody className="divide-y divide-white/6">
               {tickets.map((ticket) => (
                 <tr key={ticket.id} className="row-hover">
-                  <td className="px-4 py-3 font-medium text-slate-900">{ticket.owner.fullName}</td>
-                  <td className="px-4 py-3 text-slate-600">{ticket.owner.email}</td>
-                  <td className="px-4 py-3 text-slate-600">{ticket.owner.rollNumber ?? "—"}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900">{ticket.attendeeName ?? ticket.owner.fullName}</td>
+                  <td className="px-4 py-3 text-slate-600">{ticket.attendeeEmail ?? ticket.owner.email}</td>
+                  <td className="px-4 py-3 text-slate-600">{ticket.attendeeRollNumber ?? ticket.owner.rollNumber ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-600">{ticket.attendeePhone ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{ticket.ticketType.name}</td>
                   <td className="px-4 py-3">
                     <TicketStatusBadge status={ticket.status} />
@@ -138,6 +148,41 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
           </table>
         </Card>
       )}
+
+      {/* Phones get the same data as cards: a 6-column table cannot be read
+          on a 375px screen, and horizontal scrolling hides the status. */}
+      {tickets.length > 0 ? (
+        <ul className="space-y-3 md:hidden">
+          {tickets.map((ticket) => (
+            <li key={ticket.id}>
+              <Card glow={false} className="space-y-2 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-medium text-slate-900">{ticket.attendeeName ?? ticket.owner.fullName}</p>
+                  <TicketStatusBadge status={ticket.status} />
+                </div>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-slate-500">Email</dt>
+                    <dd className="truncate text-slate-700">{ticket.attendeeEmail ?? ticket.owner.email}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-slate-500">Roll no.</dt>
+                    <dd className="text-slate-700">{ticket.attendeeRollNumber ?? ticket.owner.rollNumber ?? "—"}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-slate-500">Ticket</dt>
+                    <dd className="text-slate-700">{ticket.ticketType.name}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-slate-500">Issued</dt>
+                    <dd className="text-slate-700">{formatDateTime(ticket.issuedAt)}</dd>
+                  </div>
+                </dl>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {tickets.length === 500 ? (
         <p className="mt-3 text-sm text-slate-500">

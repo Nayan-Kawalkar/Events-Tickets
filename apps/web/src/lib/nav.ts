@@ -1,5 +1,20 @@
 import { Role } from "./enums";
 
+/** Icon names available to navigation. Keeps this config free of JSX. */
+export type IconName =
+  | "home"
+  | "ticket"
+  | "plus"
+  | "user"
+  | "menu"
+  | "settings"
+  | "help"
+  | "dashboard"
+  | "calendar"
+  | "scan"
+  | "shield"
+  | "rupee";
+
 /**
  * Single source of truth for navigation.
  *
@@ -10,8 +25,8 @@ import { Role } from "./enums";
 export type NavItem = {
   href: string;
   label: string;
-  /** Emoji used by the mobile bottom bar; decorative, always paired with a label. */
-  icon: string;
+  /** Lucide icon name, resolved to a component in the nav components. */
+  icon: IconName;
   /** Who may see it. Undefined means everyone, including signed-out visitors. */
   roles?: Role[];
   /** Requires a signed-in user of any role. */
@@ -19,26 +34,29 @@ export type NavItem = {
 };
 
 export const PRIMARY_NAV: NavItem[] = [
-  { href: "/", label: "Events", icon: "🏠" },
-  { href: "/tickets", label: "My Tickets", icon: "🎫", authOnly: true },
-  { href: "/organizer", label: "For Organizers", icon: "➕", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/", label: "Events", icon: "home" },
+  { href: "/tickets", label: "My Tickets", icon: "ticket", authOnly: true },
+  { href: "/organizer", label: "For Organizers", icon: "plus", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/scanner", label: "Scanner", icon: "scan", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/admin", label: "Admin", icon: "shield", roles: [Role.ADMIN] },
 ];
 
 export const ACCOUNT_NAV: NavItem[] = [
-  { href: "/profile", label: "Profile", icon: "👤", authOnly: true },
-  { href: "/payments", label: "Payments", icon: "₹", authOnly: true },
-  { href: "/settings", label: "Settings", icon: "⚙️", authOnly: true },
-  { href: "/help", label: "Help", icon: "❓" },
+  { href: "/profile", label: "Profile", icon: "user", authOnly: true },
+  { href: "/payments", label: "Payments", icon: "rupee", authOnly: true },
+  { href: "/settings", label: "Settings", icon: "settings", authOnly: true },
+  { href: "/help", label: "Help", icon: "help" },
 ];
 
 export const ORGANIZER_NAV: NavItem[] = [
-  { href: "/organizer", label: "Dashboard", icon: "📊", roles: [Role.ORGANIZER, Role.ADMIN] },
-  { href: "/organizer/events", label: "My Events", icon: "📅", roles: [Role.ORGANIZER, Role.ADMIN] },
-  { href: "/scanner", label: "Scanner", icon: "📷", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/organizer", label: "Dashboard", icon: "dashboard", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/organizer/events", label: "My Events", icon: "calendar", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/scanner", label: "Scanner", icon: "scan", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/admin", label: "Admin", icon: "shield", roles: [Role.ADMIN] },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
-  { href: "/admin", label: "Admin", icon: "🛡️", roles: [Role.ADMIN] },
+  { href: "/admin", label: "Admin", icon: "shield", roles: [Role.ADMIN] },
 ];
 
 export function visibleTo(items: NavItem[], role: Role | null): NavItem[] {
@@ -53,6 +71,12 @@ export function visibleTo(items: NavItem[], role: Role | null): NavItem[] {
  * Active-state matching. "/" only matches exactly, so it does not light up on
  * every page; everything else matches its own subtree.
  */
+/** Drop items already shown elsewhere, so no link appears twice in one menu. */
+export function excluding(items: NavItem[], shown: NavItem[]): NavItem[] {
+  const seen = new Set(shown.map((item) => item.href));
+  return items.filter((item) => !seen.has(item.href));
+}
+
 export function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);

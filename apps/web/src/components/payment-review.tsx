@@ -36,8 +36,10 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
 
     toast.push(
       "success",
-      body.action === "VERIFY" ? "Payment verified and ticket issued." : "Payment rejected.",
+      body.action === "VERIFY" ? "Payment verified — ticket issued." : "Payment rejected.",
     );
+    // refresh() re-fetches this route and drops the client router cache, so the
+    // attendee list reflects the new ticket the moment it is opened.
     router.refresh();
   }
 
@@ -71,7 +73,7 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
           <img
             src={`/api/uploads/${payment.screenshotUploadId}`}
             alt={`Payment screenshot from ${payment.payer.name}`}
-            className="media-reveal max-h-72 w-full rounded-lg bg-black/30 object-contain ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.01]"
+            className="media-reveal max-h-56 w-full rounded-lg bg-black/30 object-contain ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.01] sm:max-h-72"
           />
           <span className="mt-1.5 block text-xs text-brand-400 underline-offset-2 hover:underline">
             Open full size
@@ -114,7 +116,7 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button
             disabled={pending}
             onClick={() => {

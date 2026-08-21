@@ -7,7 +7,7 @@ import {
   PaymentMode,
   TicketStatus,
 } from "@ct/db";
-import { generateTicketPublicId } from "./registration";
+import { generateTicketPublicId, type AttendeeSnapshot } from "./registration";
 import { LIVE_TICKET_STATUS_LIST } from "./ticket-status";
 
 export type SubmitReason =
@@ -66,8 +66,9 @@ export async function submitManualPayment(params: {
   ticketTypeId: string;
   upiTransactionId: string | null;
   screenshotUploadId: string | null;
+  attendee: AttendeeSnapshot;
 }): Promise<SubmitResult> {
-  const { user, eventId, ticketTypeId, upiTransactionId, screenshotUploadId } = params;
+  const { user, eventId, ticketTypeId, upiTransactionId, screenshotUploadId, attendee } = params;
 
   return prisma.$transaction(
     async (tx): Promise<SubmitResult> => {
@@ -96,7 +97,7 @@ export async function submitManualPayment(params: {
       if (ticketType.salesEndAt && ticketType.salesEndAt <= now) {
         return { ok: false, reason: "SALES_CLOSED" };
       }
-      if (ticketType.requiresStudentId && !user.rollNumber) {
+      if (ticketType.requiresStudentId && !attendee.attendeeRollNumber && !user.rollNumber) {
         return { ok: false, reason: "STUDENT_ID_REQUIRED" };
       }
 
@@ -129,6 +130,7 @@ export async function submitManualPayment(params: {
           amountPaise: ticketType.pricePaise,
           upiTransactionId,
           screenshotUploadId,
+          attendee: attendee as object,
           status: ManualPaymentStatus.PENDING,
         },
         select: { id: true },

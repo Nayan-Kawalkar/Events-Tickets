@@ -72,7 +72,7 @@ export default async function OrganizerDashboardPage() {
         <h2 id="kpis" className="sr-only">
           Key numbers
         </h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {kpis.map((kpi) => (
             <Card key={kpi.label} className="py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -125,7 +125,7 @@ export default async function OrganizerDashboardPage() {
                     <p className="font-medium text-slate-900">{event.title}</p>
                     <p className="text-sm text-slate-600">{formatDateTime(event.startsAt)}</p>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-600">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                     <span>{event._count.tickets} registered</span>
                     <EventStatusBadge status={event.status} />
                     <ButtonLink href={`/organizer/events/${event.id}/edit`} variant="secondary">

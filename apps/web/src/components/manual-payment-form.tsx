@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Field, TextInput } from "./form";
+import { Checkbox, Field, TextInput } from "./form";
 import { Alert, Button, Card } from "./ui";
 import { useToast } from "./toast";
 
@@ -10,10 +10,20 @@ export function ManualPaymentForm({
   eventId,
   ticketTypeId,
   amountLabel,
+  defaults,
+  requiresStudentId,
 }: {
   eventId: string;
   ticketTypeId: string;
   amountLabel: string;
+  defaults: {
+    attendeeName: string;
+    attendeeEmail: string;
+    attendeePhone: string;
+    attendeeRollNumber: string;
+    attendeeDepartment: string;
+  };
+  requiresStudentId: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -21,6 +31,7 @@ export function ManualPaymentForm({
   const [message, setMessage] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [fileName, setFileName] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
 
   async function onSubmit(formEvent: React.FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
@@ -69,6 +80,76 @@ export function ManualPaymentForm({
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {message ? <Alert>{message}</Alert> : null}
 
+        <div>
+          <h2 className="text-eyebrow">Attendee details</h2>
+          <p className="mt-1.5 text-sm text-slate-600">
+            These appear on the ticket and the organizer&apos;s attendee list.
+          </p>
+        </div>
+
+        <Field label="Full name" htmlFor="attendeeName" error={fields.attendeeName} required>
+          <TextInput
+            id="attendeeName"
+            name="attendeeName"
+            defaultValue={defaults.attendeeName}
+            error={fields.attendeeName}
+            autoComplete="name"
+            required
+          />
+        </Field>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Email" htmlFor="attendeeEmail" error={fields.attendeeEmail} required>
+            <TextInput
+              id="attendeeEmail"
+              name="attendeeEmail"
+              type="email"
+              defaultValue={defaults.attendeeEmail}
+              error={fields.attendeeEmail}
+              autoComplete="email"
+              required
+            />
+          </Field>
+          <Field label="Phone" htmlFor="attendeePhone" error={fields.attendeePhone}>
+            <TextInput
+              id="attendeePhone"
+              name="attendeePhone"
+              type="tel"
+              inputMode="tel"
+              defaultValue={defaults.attendeePhone}
+              error={fields.attendeePhone}
+              autoComplete="tel"
+            />
+          </Field>
+          <Field
+            label="Roll number"
+            htmlFor="attendeeRollNumber"
+            error={fields.attendeeRollNumber}
+            hint={requiresStudentId ? "Required for this ticket." : "Optional."}
+            required={requiresStudentId}
+          >
+            <TextInput
+              id="attendeeRollNumber"
+              name="attendeeRollNumber"
+              defaultValue={defaults.attendeeRollNumber}
+              error={fields.attendeeRollNumber}
+              required={requiresStudentId}
+            />
+          </Field>
+          <Field label="Department / class" htmlFor="attendeeDepartment" error={fields.attendeeDepartment}>
+            <TextInput
+              id="attendeeDepartment"
+              name="attendeeDepartment"
+              defaultValue={defaults.attendeeDepartment}
+              error={fields.attendeeDepartment}
+            />
+          </Field>
+        </div>
+
+        <div className="border-t border-white/8 pt-4">
+          <h2 className="text-eyebrow mb-2">Payment proof</h2>
+        </div>
+
         <Field
           label="UPI reference / UTR number"
           htmlFor="upiTransactionId"
@@ -102,7 +183,22 @@ export function ManualPaymentForm({
 
         {fileName ? <p className="text-xs text-slate-600">Selected: {fileName}</p> : null}
 
-        <Button type="submit" disabled={pending} className="w-full">
+        <div className="border-t border-white/8 pt-4">
+          <Checkbox
+            label="I accept the event rules"
+            hint="One ticket admits one person, once. Tickets are personal and must not be shared."
+            checked={accepted}
+            onChange={(e) => setAccepted(e.target.checked)}
+          />
+          <input type="hidden" name="acceptTerms" value={accepted ? "true" : "false"} />
+          {fields.acceptTerms ? (
+            <p role="alert" className="mt-1 text-xs font-medium text-red-300">
+              {fields.acceptTerms}
+            </p>
+          ) : null}
+        </div>
+
+        <Button type="submit" disabled={pending || !accepted} className="w-full">
           {pending ? "Submitting…" : `I have paid ${amountLabel} — submit for verification`}
         </Button>
 
