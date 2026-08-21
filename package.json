@@ -1,0 +1,35 @@
+{
+  "name": "college-ticketing",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @ct/web",
+    "build": "npm run db:generate && npm run build --workspace @ct/web",
+    "start": "npm run start --workspace @ct/web",
+    "lint": "npm run lint --workspace @ct/web",
+    "db:generate": "node node_modules/prisma/build/index.js generate --schema packages/db/prisma/schema.prisma",
+    "db:migrate": "node node_modules/prisma/build/index.js migrate dev --schema packages/db/prisma/schema.prisma",
+    "db:deploy": "node node_modules/prisma/build/index.js migrate deploy --schema packages/db/prisma/schema.prisma",
+    "db:push": "node node_modules/prisma/build/index.js db push --schema packages/db/prisma/schema.prisma",
+    "db:studio": "node node_modules/prisma/build/index.js studio --schema packages/db/prisma/schema.prisma",
+    "db:seed": "npm run seed --workspace @ct/db"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3",
+    "typescript": "^5.7.3"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "@prisma/client@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "sharp@0.34.5": true
+  }
+}

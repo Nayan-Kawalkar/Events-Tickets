@@ -1,0 +1,273 @@
+// College Digital Event Ticketing — data model
+// Phase 0: users, events, ticket types, tickets
+// Phase 1: audit logs for organizer actions
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Runtime queries: pooled connection (Supabase transaction pooler, port 6543).
+  url       = env("DATABASE_URL")
+  // Migrations: direct/session connection (port 5432). DDL and advisory locks
+  // cannot run through a transaction pooler. Falls back to DATABASE_URL when unset.
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  STUDENT
+  ORGANIZER
+  ADMIN
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentMode {
+  /// Free tickets, or (later) an integrated payment gateway.
+  AUTOMATIC
+  /// Student pays the organizer's UPI ID directly and uploads proof.
+  MANUAL_UPI
+}
+
+enum ManualPaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum UploadKind {
+  /// Organizer's UPI QR, shown to students on the payment page.
+  UPI_QR
+  /// Student's payment screenshot, visible only to them and the event organizer.
+  PAYMENT_PROOF
+}
+
+enum TicketStatus {
+  ISSUED
+  CANCELLED
+  BLOCKED
+  CHECKED_IN
+  EXPIRED
+}
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @unique
+  passwordHash    String
+  fullName        String
+  rollNumber      String?
+  department      String?
+  phone           String?  @unique
+  role            Role     @default(STUDENT)
+  isEmailVerified Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  createdEvents  Event[]     @relation("EventCreatedBy")
+  tickets        Ticket[]    @relation("TicketOwner")
+  checkedInBy    Ticket[]    @relation("TicketCheckedInBy")
+  auditLogs      AuditLog[]
+  checkinScans   CheckinAttempt[] @relation("CheckinScanner")
+  uploads        Upload[]        @relation("UploadOwner")
+  manualPayments ManualPayment[] @relation("ManualPaymentPayer")
+  verifiedPayments ManualPayment[] @relation("ManualPaymentVerifier")
+
+  @@index([role])
+  @@map("users")
+}
+
+model Event {
+  id                    String      @id @default(uuid()) @db.Uuid
+  title                 String
+  slug                  String      @unique
+  description           String?
+  venue                 String?
+  startsAt              DateTime    @db.Timestamptz(6)
+  endsAt                DateTime    @db.Timestamptz(6)
+  registrationOpensAt   DateTime?   @db.Timestamptz(6)
+  registrationClosesAt  DateTime?   @db.Timestamptz(6)
+  status                EventStatus @default(DRAFT)
+  capacity              Int?
+  bannerUrl             String?
+  // Nullable until the organization model lands in a later phase.
+  organizationId        String?     @db.Uuid
+  createdById           String      @db.Uuid
+  createdAt             DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime    @updatedAt @db.Timestamptz(6)
+
+  createdBy   User         @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  ticketTypes TicketType[]
+  tickets     Ticket[]
+  checkinAttempts CheckinAttempt[]
+  manualPayments  ManualPayment[]
+
+  @@index([status, startsAt])
+  @@index([createdById])
+  @@map("events")
+}
+
+model TicketType {
+  id                String    @id @default(uuid()) @db.Uuid
+  eventId           String    @db.Uuid
+  name              String
+  description       String?
+  pricePaise        Int       @default(0)
+  capacity          Int?
+  salesStartAt      DateTime? @db.Timestamptz(6)
+  salesEndAt        DateTime? @db.Timestamptz(6)
+  requiresStudentId Boolean   @default(true)
+  transferable      Boolean   @default(false)
+  maxPerUser        Int       @default(1)
+
+  paymentMode      PaymentMode @default(AUTOMATIC)
+  /// UPI collection details, required when paymentMode is MANUAL_UPI.
+  organizerUpiId   String?
+  organizerUpiName String?
+  organizerUpiQrUploadId String? @db.Uuid
+
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(6)
+
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+  manualPayments ManualPayment[]
+  organizerUpiQr Upload? @relation("UpiQrUpload", fields: [organizerUpiQrUploadId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, name])
+  @@index([eventId])
+  @@map("ticket_types")
+}
+
+model Ticket {
+  id               String       @id @default(uuid()) @db.Uuid
+  // Random, unguessable public identifier. Never sequential.
+  publicId         String       @unique
+  eventId          String       @db.Uuid
+  ticketTypeId     String       @db.Uuid
+  ownerUserId      String       @db.Uuid
+  status           TicketStatus @default(ISSUED)
+  qrVersion        Int          @default(1)
+  issuedAt         DateTime     @default(now()) @db.Timestamptz(6)
+  checkedInAt      DateTime?    @db.Timestamptz(6)
+  checkedInByUserId String?     @db.Uuid
+  // Plain column until the gates table lands with the scanner phase.
+  checkedInGateId  String?
+  createdAt        DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(6)
+
+  event         Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ticketType    TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  owner         User       @relation("TicketOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  checkedInBy   User?      @relation("TicketCheckedInBy", fields: [checkedInByUserId], references: [id], onDelete: SetNull)
+  checkinAttempts CheckinAttempt[]
+  manualPayment   ManualPayment? @relation("ManualPaymentTicket")
+
+  @@index([eventId, status])
+  @@index([ownerUserId])
+  @@index([ticketTypeId])
+  @@map("tickets")
+}
+
+/// Every validation attempt, approved or not. Invalid scans are the signal that
+/// someone is trying copied or forged tickets, so they are recorded too.
+model CheckinAttempt {
+  id            String   @id @default(uuid()) @db.Uuid
+  ticketId      String?  @db.Uuid
+  eventId       String?  @db.Uuid
+  gateId        String?
+  scannerUserId String?  @db.Uuid
+  /// APPROVED or the rejection reason (ALREADY_USED, INVALID_SIGNATURE, ...).
+  result        String
+  reason        String?
+  deviceId      String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  ticket  Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  scanner User?   @relation("CheckinScanner", fields: [scannerUserId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt(sort: Desc)])
+  @@index([ticketId])
+  @@map("checkin_attempts")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  entityType  String
+  entityId    String
+  action      String
+  metadata    Json     @default("{}")
+  ip          String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// Binary files kept in the database rather than object storage.
+///
+/// This keeps the pilot deployable anywhere with no bucket to configure. Files
+/// are small (payment screenshots, UPI QR images) and access-controlled by the
+/// route that serves them. Move to S3/Supabase Storage before high volume.
+model Upload {
+  id           String     @id @default(uuid()) @db.Uuid
+  kind         UploadKind
+  mimeType     String
+  sizeBytes    Int
+  data         Bytes
+  uploadedById String     @db.Uuid
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+
+  uploadedBy   User            @relation("UploadOwner", fields: [uploadedById], references: [id], onDelete: Cascade)
+  upiQrFor     TicketType[]    @relation("UpiQrUpload")
+  proofFor     ManualPayment[] @relation("PaymentProof")
+
+  @@index([uploadedById])
+  @@map("uploads")
+}
+
+/// A student's claim that they paid the organizer by UPI.
+///
+/// A row here is NOT a ticket. The ticket is created only when an organizer
+/// verifies the payment against their own bank/UPI app.
+model ManualPayment {
+  id                String              @id @default(uuid()) @db.Uuid
+  ticketTypeId      String              @db.Uuid
+  eventId           String              @db.Uuid
+  userId            String              @db.Uuid
+  amountPaise       Int
+  /// UTR / reference number as typed by the student. Unverified text.
+  upiTransactionId  String?
+  screenshotUploadId String?            @db.Uuid
+  status            ManualPaymentStatus @default(PENDING)
+  verifiedByUserId  String?             @db.Uuid
+  verifiedAt        DateTime?           @db.Timestamptz(6)
+  rejectionReason   String?
+  /// Set once verification issues a ticket, so a retry cannot issue a second.
+  issuedTicketId    String?             @unique @db.Uuid
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(6)
+
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  user         User       @relation("ManualPaymentPayer", fields: [userId], references: [id], onDelete: Restrict)
+  verifiedBy   User?      @relation("ManualPaymentVerifier", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  screenshot   Upload?    @relation("PaymentProof", fields: [screenshotUploadId], references: [id], onDelete: SetNull)
+  issuedTicket Ticket?    @relation("ManualPaymentTicket", fields: [issuedTicketId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, status])
+  @@index([userId])
+  @@map("manual_payments")
+}
