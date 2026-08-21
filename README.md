@@ -2,7 +2,8 @@
 
 Mobile-first web app that replaces printed event passes with digital tickets. Students
 register with a college account; organizers create events and ticket types and see who is
-registered. QR generation and gate scanning arrive in a later phase.
+registered, students carry a signed QR ticket, and gate volunteers scan it for one-time entry.
+Paid tickets are collected by manual UPI transfer with organizer verification.
 
 Roadmap: [`../claude.md`](../claude.md) · Blueprint: [`../college-digital-ticketing-implementation.md`](../college-digital-ticketing-implementation.md)
 
@@ -79,6 +80,38 @@ field is trusted, and compared in constant time. Rotating `QR_SIGNING_SECRET` in
 QR already issued.
 
 A signature proves the payload came from us — not that the ticket is unused. Both checks matter.
+
+**Phase 4 — manual UPI payments**
+
+- Ticket types choose a `paymentMode`: `AUTOMATIC` (free) or `MANUAL_UPI`
+- Organizer sets their UPI ID, account name and an optional UPI QR image per ticket type
+- Student sees the QR, UPI ID and exact amount, pays directly, then submits a UTR and a
+  screenshot — this creates a `PENDING` record and **no ticket**
+- `/organizer/events/[eventId]/payments` — verification queue with the screenshot, payer
+  details and UTR, plus Verify (issues the ticket) and Reject (with a reason)
+- `/student/payments` — the student sees pending / verified / rejected, with the reason
+- Email on submit, on verification (the ticket) and on rejection
+- Every submit, verify and reject written to `audit_logs`
+
+### Why a payment record is not a ticket
+
+A screenshot is a picture, not a payment. Verification is a human step: the organizer confirms
+the money arrived in their own UPI or bank app, and only then does a ticket exist. The UI says
+this on both sides, and the verify button asks for confirmation.
+
+Two organizers clicking Verify at once cannot issue two tickets — the update is guarded on
+`status = 'PENDING'`, verified against Postgres (concurrent updates returned 1 and 0 rows). If a
+seat has gone in the meantime, the whole transaction rolls back and the payment stays `PENDING`
+so it can be retried or rejected. Pending payments count against capacity, so an organizer
+cannot verify more payments than there are seats.
+
+### Uploads
+
+Images are stored in Postgres (`uploads` table), so there is no bucket to configure. Files are
+capped at 5 MB and accepted only if their **magic bytes** are JPEG, PNG or WebP — a declared
+Content-Type is ignored. SVG, HTML and executables are rejected (verified by test). Payment
+screenshots are served only to the student who uploaded them and to someone who can manage the
+event; anyone else gets a 404. Move to object storage before high volume.
 
 ## Requirements
 
@@ -182,6 +215,10 @@ with a strict Zod schema (unknown fields are rejected) and verify the request or
 | GET | `/api/me` | Signed-in user |
 | PATCH | `/api/me` | Signed-in user — own profile only |
 | POST | `/api/events/:eventId/register` | Signed-in user |
+| POST | `/api/events/:eventId/manual-payments` | Signed-in user (multipart) |
+| POST | `/api/organizer/manual-payments/:paymentId` | Event owner or `ADMIN` — verify/reject |
+| POST | `/api/uploads` | `ORGANIZER`, `ADMIN` — UPI QR only |
+| GET | `/api/uploads/:uploadId` | Owner, or event manager for payment proofs |
 | POST | `/api/checkin/validate` | `ORGANIZER` (own events), `ADMIN` |
 | GET | `/api/scanner/events` | `ORGANIZER` (own events), `ADMIN` |
 | POST | `/api/organizer/events` | `ORGANIZER`, `ADMIN` |
@@ -222,9 +259,13 @@ character, which breaks npm's generated `.cmd` shims. All scripts therefore call
 
 ## Not yet built
 
-Payments are next: paid ticket types are refused (`PAID_NOT_SUPPORTED`) until a verified
-payment can precede ticket issuance. After that: organizations, dynamic QR for high-demand
+A payment **gateway** (Razorpay/Stripe order + webhook) is not built — only manual UPI. A paid
+ticket type left on `AUTOMATIC` is still refused with `PAID_NOT_SUPPORTED`; switch it to
+`MANUAL_UPI` to collect money today. After that: organizations, dynamic QR for high-demand
 events, and college SSO.
+
+Manual payments have no automatic expiry yet. The `EXPIRED` status exists but nothing sets it,
+so stale pending claims hold their seat until an organizer rejects them.
 
 ### Operational notes for the scanner
 

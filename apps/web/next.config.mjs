@@ -12,9 +12,42 @@ try {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // Keep already-fetched pages in the client router cache, so Back and
+    // repeat visits render instantly instead of re-querying the database.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+  },
   // The db package ships TypeScript source that Next compiles for us.
   transpilePackages: ["@ct/db"],
   serverExternalPackages: ["@prisma/client", "bcryptjs"],
+  async redirects() {
+    return [
+      // Routes moved to the canonical page map; keep old links working.
+      { source: "/student/tickets", destination: "/tickets", permanent: true },
+      { source: "/student/tickets/:publicId", destination: "/tickets/:publicId", permanent: true },
+      { source: "/student/profile", destination: "/profile", permanent: true },
+      { source: "/student/payments", destination: "/payments", permanent: true },
+      // Names used in the page map that differ from the built routes.
+      { source: "/organizer/events/create", destination: "/organizer/events/new", permanent: false },
+      {
+        source: "/organizer/events/:eventId/manual-payments",
+        destination: "/organizer/events/:eventId/payments",
+        permanent: false,
+      },
+      {
+        source: "/organizer/events/:eventId/tickets",
+        destination: "/organizer/events/:eventId/edit",
+        permanent: false,
+      },
+      // The scanner is one screen; its sub-routes point back at it.
+      { source: "/scanner/checkin", destination: "/scanner", permanent: false },
+      { source: "/scanner/gates", destination: "/scanner", permanent: false },
+      { source: "/scanner/login", destination: "/login?next=/scanner", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

@@ -175,7 +175,7 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
   return (
     <div className="space-y-4">
       {!online ? (
-        <div role="alert" className="rounded-lg bg-amber-100 px-4 py-3 text-sm font-medium text-amber-900">
+        <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-medium text-amber-200">
           No network connection. Check-ins cannot be validated until it returns.
         </div>
       ) : null}
@@ -183,14 +183,14 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
       <Card className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label htmlFor="event" className="mb-1 block text-sm font-medium text-slate-800">
+            <label htmlFor="event" className="mb-1.5 block text-sm font-medium text-slate-800">
               Event
             </label>
             <select
               id="event"
               value={eventId}
               onChange={(e) => setEventId(e.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25"
             >
               {events.map((event) => (
                 <option key={event.id} value={event.id}>
@@ -200,14 +200,14 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
             </select>
           </div>
           <div>
-            <label htmlFor="gate" className="mb-1 block text-sm font-medium text-slate-800">
+            <label htmlFor="gate" className="mb-1.5 block text-sm font-medium text-slate-800">
               Gate
             </label>
             <input
               id="gate"
               value={gateId}
               onChange={(e) => setGateId(e.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25"
               placeholder="Main Gate"
             />
           </div>
@@ -219,7 +219,7 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
         <ResultPanel outcome={outcome} onDismiss={() => setOutcome(null)} />
       ) : (
         <Card className="space-y-3">
-          <div className="relative overflow-hidden rounded-xl bg-slate-900">
+          <div className="relative overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
             <video
               ref={videoRef}
               className="aspect-square w-full object-cover"
@@ -228,7 +228,7 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
               aria-label="Camera preview"
             />
             {!scanning ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 p-6 text-center text-sm text-slate-200">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-6 text-center text-sm text-slate-700">
                 {busy ? "Checking…" : "Camera is off"}
               </div>
             ) : null}
@@ -247,13 +247,13 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
           </div>
 
           {cameraError ? (
-            <p role="alert" className="text-sm font-medium text-red-700">
+            <p role="alert" className="text-sm font-medium text-red-300">
               {cameraError}
             </p>
           ) : null}
 
           <form
-            className="flex gap-2 border-t border-slate-100 pt-3"
+            className="flex gap-2 border-t border-white/8 pt-3"
             onSubmit={(e) => {
               e.preventDefault();
               const code = manualCode.trim();
@@ -270,7 +270,7 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
               placeholder="Paste ticket code (manual entry)"
-              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25"
             />
             <Button type="submit" variant="secondary" disabled={busy}>
               Check
@@ -280,22 +280,22 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
       )}
 
       <Card>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
           Last 5 scans
         </h2>
         {recent.length === 0 ? (
           <p className="text-sm text-slate-500">No scans yet.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 text-sm">
+          <ul className="divide-y divide-white/6 text-sm">
             {recent.map((scan) => (
-              <li key={scan.at} className="flex items-center justify-between py-2">
+              <li key={scan.at} className="row-hover flex items-center justify-between rounded px-1 py-2">
                 <span className="text-slate-700">{scan.label}</span>
                 <span
                   className={cx(
                     "rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
                     scan.approved
-                      ? "bg-emerald-50 text-emerald-800 ring-emerald-300"
-                      : "bg-red-50 text-red-800 ring-red-300",
+                      ? "bg-brand-500/15 text-brand-300 ring-brand-500/40"
+                      : "bg-red-500/15 text-red-300 ring-red-400/40",
                   )}
                 >
                   {scan.approved ? "✓ in" : "✕ no"}

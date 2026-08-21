@@ -33,10 +33,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             className={cx(
-              "pointer-events-auto w-full max-w-md rounded-lg border px-4 py-3 text-sm shadow-lg",
+              "pointer-events-auto w-full max-w-md rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-md animate-rise",
               toast.tone === "success"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-900"
-                : "border-red-300 bg-red-50 text-red-900",
+                ? "border-brand-500/40 bg-[#0b2a27]/95 text-brand-200 shadow-brand-500/10"
+                : "border-red-400/40 bg-[#2a0f0f]/95 text-red-200 shadow-red-500/10",
             )}
           >
             <span className="font-medium">{toast.tone === "success" ? "Success: " : "Error: "}</span>

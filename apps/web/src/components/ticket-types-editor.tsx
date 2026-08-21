@@ -113,7 +113,7 @@ export function TicketTypesEditor({
   return (
     <section aria-labelledby="ticket-types-heading" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="ticket-types-heading" className="text-lg font-semibold text-slate-900">
+        <h2 id="ticket-types-heading" className="font-display text-xl font-normal text-slate-900">
           Ticket types
         </h2>
         {eventCapacity !== null ? (
@@ -200,7 +200,7 @@ function TicketTypeSummary({ row, onEdit }: { row: TicketTypeRow; onEdit: () => 
           <li>{row.requiresStudentId ? "College ID required" : "Guests allowed"}</li>
           <li>{row.transferable ? "Transferable" : "Non-transferable"}</li>
           {row.paymentMode === PaymentMode.MANUAL_UPI ? (
-            <li className="font-medium text-amber-700">Manual UPI · {row.organizerUpiId}</li>
+            <li className="font-medium text-amber-300">Manual UPI · {row.organizerUpiId}</li>
           ) : null}
         </ul>
       </div>
@@ -414,7 +414,7 @@ function TicketTypeForm({
                 onUploaded={(id) => set("organizerUpiQrUploadId", id)}
               />
 
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <p className="rounded-lg bg-amber-400/10 px-3 py-2 text-xs text-amber-200 ring-1 ring-inset ring-amber-400/25">
                 Students pay you directly and upload proof. You must confirm every payment in your
                 own UPI or bank app before issuing a ticket — screenshots can be faked.
               </p>
@@ -501,7 +501,7 @@ function UpiQrUpload({
         <img
           src={`/api/uploads/${uploadId}`}
           alt="Current UPI QR code"
-          className="mb-2 h-32 w-32 rounded-lg object-contain ring-1 ring-slate-200"
+          className="mb-2 h-32 w-32 rounded-lg object-contain ring-1 ring-white/10"
         />
       ) : null}
 
@@ -513,7 +513,7 @@ function UpiQrUpload({
           const file = e.target.files?.[0];
           if (file) void upload(file);
         }}
-        className="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium"
+        className="w-full rounded-lg border border-white/12 bg-white/[0.03] p-2 text-sm text-slate-800 transition-colors hover:border-white/20 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand-500/15 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-300 hover:file:bg-brand-500/25"
       />
       <p className="mt-1 text-xs text-slate-500">
         {busy ? "Uploading…" : "Optional. Students can also pay using the UPI ID alone."}

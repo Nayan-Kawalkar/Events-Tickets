@@ -60,7 +60,7 @@ export function ManualPaymentForm({
     }
 
     toast.push("success", "Payment details submitted for verification.");
-    router.push("/student/payments?submitted=1");
+    router.push("/payments?submitted=1");
     router.refresh();
   }
 
@@ -96,7 +96,7 @@ export function ManualPaymentForm({
             type="file"
             accept="image/jpeg,image/png,image/webp"
             onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-            className="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium"
+            className="w-full rounded-lg border border-white/12 bg-white/[0.03] p-2 text-sm text-slate-800 transition-colors hover:border-white/20 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand-500/15 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-300 hover:file:bg-brand-500/25"
           />
         </Field>
 

@@ -6,6 +6,7 @@ import { EventStatus } from "@/lib/enums";
 import { apiRequest } from "@/lib/client-api";
 import { slugify } from "@/lib/slug";
 import { Field, Select, TextArea, TextInput } from "./form";
+import { ImageUpload } from "./image-upload";
 import { Alert, Button, Card } from "./ui";
 import { useToast } from "./toast";
 
@@ -21,6 +22,7 @@ export type EventFormValues = {
   registrationClosesAt: string;
   status: EventStatus;
   capacity: string;
+  posterUploadId: string;
 };
 
 export const emptyEvent: EventFormValues = {
@@ -34,6 +36,7 @@ export const emptyEvent: EventFormValues = {
   registrationClosesAt: "",
   status: EventStatus.DRAFT,
   capacity: "",
+  posterUploadId: "",
 };
 
 export function EventForm({
@@ -75,6 +78,7 @@ export function EventForm({
       registrationClosesAt: values.registrationClosesAt,
       status: values.status,
       capacity: values.capacity,
+      posterUploadId: values.posterUploadId || null,
     };
 
     const result = isEdit
@@ -131,6 +135,14 @@ export function EventForm({
             }}
           />
         </Field>
+
+        <ImageUpload
+          kind="EVENT_POSTER"
+          label="Event poster"
+          hint="Landscape works best (16:9). JPG, PNG or WebP, up to 5 MB."
+          uploadId={values.posterUploadId}
+          onUploaded={(id) => set("posterUploadId", id)}
+        />
 
         <Field label="Description" htmlFor="description" error={fields.description}>
           <TextArea

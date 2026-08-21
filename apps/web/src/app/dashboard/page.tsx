@@ -37,7 +37,7 @@ export default async function DashboardPage({ searchParams }: Props) {
         <div className="mb-6">
           <Alert tone="info">
             Add your roll number to register for student-only tickets.{" "}
-            <Link href="/student/profile" className="font-medium underline">
+            <Link href="/profile" className="font-medium underline">
               Update your profile
             </Link>
             .
@@ -72,7 +72,7 @@ async function OrganizerSummary({ userId, isAdmin }: { userId: string; isAdmin: 
   return (
     <section aria-labelledby="my-events" className="mb-10">
       <div className="mb-3 flex items-center justify-between">
-        <h2 id="my-events" className="text-lg font-semibold text-slate-900">
+        <h2 id="my-events" className="font-display text-xl font-normal text-slate-900">
           {isAdmin ? "All events" : "Events you created"}
         </h2>
         <ButtonLink href="/organizer/events" variant="secondary">
@@ -94,7 +94,7 @@ async function OrganizerSummary({ userId, isAdmin }: { userId: string; isAdmin: 
                 <div>
                   <Link
                     href={`/organizer/events/${event.id}/edit`}
-                    className="font-medium text-slate-900 hover:text-brand-700"
+                    className="font-medium text-slate-900 hover:text-brand-400"
                   >
                     {event.title}
                   </Link>
@@ -131,10 +131,10 @@ async function StudentTickets({ userId }: { userId: string }) {
   return (
     <section aria-labelledby="my-tickets">
       <div className="mb-3 flex items-center justify-between">
-        <h2 id="my-tickets" className="text-lg font-semibold text-slate-900">
+        <h2 id="my-tickets" className="font-display text-xl font-normal text-slate-900">
           My tickets
         </h2>
-        <ButtonLink href="/student/tickets" variant="secondary">
+        <ButtonLink href="/tickets" variant="secondary">
           All tickets
         </ButtonLink>
       </div>
@@ -161,7 +161,7 @@ async function StudentTickets({ userId }: { userId: string }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <TicketStatusBadge status={ticket.status} />
-                  <ButtonLink href={`/student/tickets/${ticket.publicId}`} variant="secondary">
+                  <ButtonLink href={`/tickets/${ticket.publicId}`} variant="secondary">
                     View ticket
                   </ButtonLink>
                 </div>

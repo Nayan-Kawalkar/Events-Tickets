@@ -9,10 +9,10 @@ export const metadata: Metadata = { title: "My payments" };
 export const dynamic = "force-dynamic";
 
 const statusStyles: Record<ManualPaymentStatus, string> = {
-  PENDING: "bg-amber-50 text-amber-800 ring-amber-300",
-  VERIFIED: "bg-emerald-50 text-emerald-800 ring-emerald-300",
-  REJECTED: "bg-red-50 text-red-800 ring-red-300",
-  EXPIRED: "bg-slate-100 text-slate-700 ring-slate-300",
+  PENDING: "bg-orange-400/12 text-orange-300 ring-orange-400/40",
+  VERIFIED: "bg-emerald-400/12 text-emerald-300 ring-emerald-400/40",
+  REJECTED: "bg-red-500/10 text-red-300 ring-red-400/30",
+  EXPIRED: "bg-slate-200/50 text-slate-700 ring-white/10",
 };
 
 const statusLabels: Record<ManualPaymentStatus, string> = {
@@ -25,7 +25,7 @@ const statusLabels: Record<ManualPaymentStatus, string> = {
 type Props = { searchParams: Promise<{ submitted?: string }> };
 
 export default async function MyPaymentsPage({ searchParams }: Props) {
-  const user = await requireUser("/student/payments");
+  const user = await requireUser("/payments");
   const submitted = (await searchParams).submitted === "1";
 
   const payments = await prisma.manualPayment.findMany({
@@ -93,15 +93,15 @@ export default async function MyPaymentsPage({ searchParams }: Props) {
                 </div>
 
                 {payment.status === ManualPaymentStatus.REJECTED && payment.rejectionReason ? (
-                  <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+                  <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-400/25">
                     Reason: {payment.rejectionReason}
                   </p>
                 ) : null}
 
                 {payment.issuedTicket ? (
                   <Link
-                    href={`/student/tickets/${payment.issuedTicket.publicId}`}
-                    className="inline-block text-sm font-medium text-brand-700 underline-offset-2 hover:underline"
+                    href={`/tickets/${payment.issuedTicket.publicId}`}
+                    className="inline-block text-sm font-medium text-brand-400 underline-offset-2 hover:underline"
                   >
                     View your ticket →
                   </Link>

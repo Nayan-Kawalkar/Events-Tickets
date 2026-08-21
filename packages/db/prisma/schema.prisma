@@ -44,6 +44,8 @@ enum ManualPaymentStatus {
 }
 
 enum UploadKind {
+  /// Event poster. Public: shown on the events list to signed-out visitors.
+  EVENT_POSTER
   /// Organizer's UPI QR, shown to students on the payment page.
   UPI_QR
   /// Student's payment screenshot, visible only to them and the event organizer.
@@ -97,6 +99,7 @@ model Event {
   status                EventStatus @default(DRAFT)
   capacity              Int?
   bannerUrl             String?
+  posterUploadId        String?     @db.Uuid
   // Nullable until the organization model lands in a later phase.
   organizationId        String?     @db.Uuid
   createdById           String      @db.Uuid
@@ -108,6 +111,7 @@ model Event {
   tickets     Ticket[]
   checkinAttempts CheckinAttempt[]
   manualPayments  ManualPayment[]
+  poster          Upload?      @relation("EventPoster", fields: [posterUploadId], references: [id], onDelete: SetNull)
 
   @@index([status, startsAt])
   @@index([createdById])
@@ -232,6 +236,7 @@ model Upload {
 
   uploadedBy   User            @relation("UploadOwner", fields: [uploadedById], references: [id], onDelete: Cascade)
   upiQrFor     TicketType[]    @relation("UpiQrUpload")
+  posterFor    Event[]         @relation("EventPoster")
   proofFor     ManualPayment[] @relation("PaymentProof")
 
   @@index([uploadedById])

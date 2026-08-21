@@ -17,8 +17,11 @@ export async function TicketQr({ payload, dimmed = false }: { payload: string; d
 
   return (
     <div
-      className={`mx-auto w-full max-w-xs rounded-xl bg-white p-3 ring-1 ring-slate-200 ${
-        dimmed ? "opacity-40 grayscale" : ""
+      // The white plate and dark modules are pinned, not themed: scanners need
+      // the contrast, and a dark-themed QR reads poorly or not at all.
+      style={{ backgroundColor: "#ffffff" }}
+      className={`mx-auto w-full max-w-xs rounded-xl p-3 shadow-[0_0_40px_-10px_rgba(43,220,163,0.35)] ring-1 ring-white/20 transition-opacity ${
+        dimmed ? "opacity-30 grayscale" : ""
       }`}
       // qrcode emits a self-contained <svg>; the payload is signed text we produced.
       dangerouslySetInnerHTML={{ __html: svg }}

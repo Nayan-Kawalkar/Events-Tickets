@@ -18,7 +18,7 @@ type Props = {
 
 export default async function TicketDetailPage({ params, searchParams }: Props) {
   const { publicId } = await params;
-  const user = await requireUser(`/student/tickets/${publicId}`);
+  const user = await requireUser(`/tickets/${publicId}`);
   const isNew = (await searchParams).new === "1";
 
   const ticket = await prisma.ticket.findUnique({
@@ -109,14 +109,14 @@ export default async function TicketDetailPage({ params, searchParams }: Props) 
         </dl>
 
         {ticket.ticketType.requiresStudentId ? (
-          <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">
+          <p className="rounded-lg bg-amber-400/10 px-4 py-3 text-sm text-amber-200 ring-1 ring-inset ring-amber-400/30">
             Carry your college ID. Gate staff may check it against this ticket.
           </p>
         ) : null}
       </Card>
 
       <p className="mt-4 text-sm text-slate-600">
-        <Link href="/student/tickets" className="font-medium text-brand-700 underline-offset-2 hover:underline">
+        <Link href="/tickets" className="font-medium text-brand-400 underline-offset-2 hover:underline">
           ← All my tickets
         </Link>
       </p>

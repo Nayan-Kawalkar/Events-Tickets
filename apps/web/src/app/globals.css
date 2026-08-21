@@ -1,32 +1,319 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #dbe6ff;
-  --color-brand-500: #3b5bdb;
-  --color-brand-600: #2f49b2;
-  --color-brand-700: #26398c;
+  /* --- Brand: cyan-green accent --- */
+  --color-brand-50: #e6fbf3;
+  --color-brand-100: #b9f3de;
+  --color-brand-200: #7fe9c5;
+  --color-brand-300: #4fe0af;
+  --color-brand-400: #2bdca3;
+  --color-brand-500: #2bdca3;
+  --color-brand-600: #1fc08c;
+  --color-brand-700: #17a074;
+  --color-brand-800: #128460;
+  --color-brand-900: #0c5f45;
+
+  /* --- Surfaces --- */
+  --color-surface: #09201e;
+  --color-surface-raised: #0c2b27;
+  --color-surface-sunken: #061715;
+
+  /* --- Neutral ramp, inverted for a dark UI ---
+     The app uses `slate` as its neutral scale (light background, dark text).
+     Inverting the ramp here re-themes every screen from one place: `text-slate-900`
+     becomes the brightest text, `bg-slate-50` the darkest surface. */
+  --color-slate-50: #07211f;
+  --color-slate-100: #0b2a27;
+  --color-slate-200: #123a35;
+  --color-slate-300: #1c4b45;
+  --color-slate-400: #3f6b66;
+  --color-slate-500: #5e837f;
+  --color-slate-600: #8fb3ae;
+  --color-slate-700: #b4d3ce;
+  --color-slate-800: #d2e8e4;
+  --color-slate-900: #e3f2ef;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-playfair), Georgia, serif;
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
+  --bg-gradient: radial-gradient(circle at 50% 0%, #0c2b27 0%, #041413 60%, #020a0a 100%);
+}
+
+html {
+  /* Anchor links and "back to top" land smoothly, but never for users who
+     have asked the OS to reduce motion (handled below). */
+  scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  color: var(--color-slate-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100dvh;
+}
+
+/* Display type: serif for page titles, matching the reference. */
+.font-display {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
 }
 
 /* Visible keyboard focus everywhere — status is never conveyed by colour alone. */
 :focus-visible {
-  outline: 2px solid var(--color-brand-600);
+  outline: 2px solid var(--color-brand-500);
   outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgba(43, 220, 163, 0.28);
+  color: #ffffff;
+}
+
+/* --- Card spotlight ---------------------------------------------------------
+   Two layers driven by --mouse-x / --mouse-y, set by the SpotlightCard client
+   component: a bright 1.5px border trace, and a soft ambient wash inside.
+   Both fade via --glow-opacity so nothing flickers when the pointer leaves. */
+.spotlight {
+  position: relative;
+  isolation: isolate;
+  transition:
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    transform 0.3s ease;
+}
+
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: radial-gradient(
+    160px circle at var(--mouse-x, -200px) var(--mouse-y, -200px),
+    rgba(43, 220, 163, 1) 0%,
+    rgba(43, 220, 163, 0.45) 45%,
+    transparent 80%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: var(--glow-opacity, 0);
+  transition: opacity 0.25s ease;
+  z-index: 2;
+}
+
+.spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    200px circle at var(--mouse-x, -200px) var(--mouse-y, -200px),
+    rgba(43, 220, 163, 0.16) 0%,
+    rgba(43, 220, 163, 0.04) 50%,
+    transparent 80%
+  );
+  pointer-events: none;
+  opacity: var(--glow-opacity, 0);
+  transition: opacity 0.25s ease;
+  z-index: 0;
+}
+
+/* Card content sits above the ambient wash. */
+.spotlight > * {
+  position: relative;
+  z-index: 1;
+}
+
+.spotlight:hover {
+  box-shadow: 0 20px 45px rgba(43, 220, 163, 0.12);
+}
+
+/* Media desaturates until hovered, as in the reference. */
+.media-reveal {
+  filter: grayscale(100%) contrast(1.05);
+  transition: filter 0.35s ease;
+}
+
+.spotlight:hover .media-reveal,
+.media-reveal:hover {
+  filter: grayscale(0%);
+}
+
+/* Underline that grows from the left on hover. */
+.link-underline {
+  position: relative;
+}
+
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 1px;
+  width: 100%;
+  background: var(--color-brand-500);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+
+.link-underline:hover::after {
+  transform: scaleX(1);
+}
+
+/* Rows that lift slightly on hover. */
+.row-hover {
+  transition:
+    background-color 0.25s ease,
+    transform 0.25s ease;
+}
+
+.row-hover:hover {
+  background-color: rgba(43, 220, 163, 0.04);
+}
+
+/* Content entrance, used sparingly on page bodies. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Scrollbar tuned to the palette rather than the OS default. */
+* {
+  scrollbar-color: var(--color-slate-300) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-slate-300);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-slate-400);
+  background-clip: content-box;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Drawer slide-in, referenced inline by the mobile menu panel. */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* --- Typography scale -------------------------------------------------------
+   Body sits at 16px with a 1.6 measure. Display sizes use the serif face and
+   clamp so headings shrink on phones without a media query per level. */
+body {
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+}
+
+.text-display-lg {
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 1.4rem + 2.6vw, 3.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.text-display {
+  font-family: var(--font-serif);
+  font-size: clamp(1.6rem, 1.25rem + 1.5vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.text-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.15rem, 1.05rem + 0.5vw, 1.4rem);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+/* Eyebrow label above a heading. */
+.text-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-slate-500);
+}
+
+/* Long-form copy: cap the measure so lines stay readable. */
+.prose-measure {
+  max-width: 68ch;
+  line-height: 1.7;
+}
+
+/* Codes, UTRs and ticket ids. */
+.text-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+/* Cards that are a link target: lift on hover, and keep the media inside. */
+.card-interactive {
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.card-interactive:hover {
+  transform: translateY(-3px);
+  border-color: rgba(43, 220, 163, 0.28);
+}
+
+/* Section rhythm: 32–48px vertical spacing on an 8px grid. */
+.section-gap > * + * {
+  margin-top: 2.5rem;
 }

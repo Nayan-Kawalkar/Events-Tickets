@@ -19,7 +19,7 @@ export default async function LoginPage({ searchParams }: Props) {
 
   return (
     <div className="mx-auto max-w-md">
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Sign in</h1>
+      <h1 className="mb-6 font-display text-3xl font-normal tracking-tight">Sign in</h1>
 
       {params.signedOut ? (
         <div className="mb-4">
@@ -33,7 +33,7 @@ export default async function LoginPage({ searchParams }: Props) {
 
       <p className="mt-4 text-sm text-slate-600">
         New here?{" "}
-        <Link href="/register" className="font-medium text-brand-700 underline-offset-2 hover:underline">
+        <Link href="/register" className="font-medium text-brand-400 underline-offset-2 hover:underline">
           Create an account
         </Link>
       </p>

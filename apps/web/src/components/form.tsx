@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { cx } from "./ui";
 
 const controlBase =
-  "w-full min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-100";
+  "w-full min-h-11 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2 text-sm text-slate-900 transition-colors duration-200 placeholder:text-slate-500 hover:border-white/20 focus:border-brand-500 focus:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-600";
 
 export function Field({
   label,
@@ -23,14 +23,14 @@ export function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-slate-800">
+      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-slate-800">
         {label}
-        {required ? <span className="ml-0.5 text-red-600" aria-hidden="true">*</span> : null}
+        {required ? <span className="ml-0.5 text-red-400" aria-hidden="true">*</span> : null}
       </label>
       {children}
-      {hint && !error ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+      {hint && !error ? <p className="mt-1.5 text-xs text-slate-500">{hint}</p> : null}
       {error ? (
-        <p id={`${htmlFor}-error`} role="alert" className="mt-1 text-xs font-medium text-red-700">
+        <p id={`${htmlFor}-error`} role="alert" className="mt-1.5 text-xs font-medium text-red-300">
           {error}
         </p>
       ) : null}
@@ -48,7 +48,7 @@ export function TextInput({
       {...props}
       aria-invalid={error ? true : undefined}
       aria-describedby={error && props.id ? `${props.id}-error` : undefined}
-      className={cx(controlBase, error && "border-red-400", className)}
+      className={cx(controlBase, error && "border-red-400/70 focus:ring-red-400/25", className)}
     />
   );
 }
@@ -63,7 +63,7 @@ export function TextArea({
       {...props}
       aria-invalid={error ? true : undefined}
       aria-describedby={error && props.id ? `${props.id}-error` : undefined}
-      className={cx(controlBase, "min-h-24", error && "border-red-400", className)}
+      className={cx(controlBase, "min-h-24", error && "border-red-400/70 focus:ring-red-400/25", className)}
     />
   );
 }
@@ -77,7 +77,12 @@ export function Select({
     <select
       {...props}
       aria-invalid={error ? true : undefined}
-      className={cx(controlBase, error && "border-red-400", className)}
+      className={cx(
+        controlBase,
+        "cursor-pointer [&>option]:bg-[#0b2a27] [&>option]:text-[#e3f2ef]",
+        error && "border-red-400/70 focus:ring-red-400/25",
+        className,
+      )}
     />
   );
 }
@@ -88,11 +93,11 @@ export function Checkbox({
   ...props
 }: React.ComponentProps<"input"> & { label: string; hint?: string }) {
   return (
-    <label className="flex items-start gap-3 py-2 text-sm text-slate-800">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg py-2 text-sm text-slate-800 transition-colors hover:text-slate-900">
       <input
         type="checkbox"
         {...props}
-        className="mt-0.5 h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+        className="mt-0.5 h-5 w-5 cursor-pointer rounded border-white/20 bg-white/5 text-brand-500 accent-[#2bdca3] transition-colors focus:ring-brand-500/40"
       />
       <span>
         <span className="font-medium">{label}</span>

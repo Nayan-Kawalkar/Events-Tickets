@@ -83,6 +83,9 @@ export async function PATCH(request: Request, { params }: Params) {
           : {}),
         ...(input.status !== undefined ? { status: input.status as typeof event.status } : {}),
         ...(input.capacity !== undefined ? { capacity: input.capacity as number | null } : {}),
+        ...(input.posterUploadId !== undefined
+          ? { posterUploadId: (input.posterUploadId as string) || null }
+          : {}),
       },
       select: { id: true, slug: true, title: true, status: true },
     });

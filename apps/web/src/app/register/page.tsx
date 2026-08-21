@@ -14,7 +14,7 @@ export default async function RegisterPage() {
 
   return (
     <div className="mx-auto max-w-md">
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight">Create your account</h1>
+      <h1 className="mb-2 font-display text-3xl font-normal tracking-tight">Create your account</h1>
       <p className="mb-6 text-sm text-slate-600">
         {allowedEmailDomains.length > 0
           ? `Sign up with an email on ${allowedEmailDomains.join(" or ")}.`
@@ -27,7 +27,7 @@ export default async function RegisterPage() {
 
       <p className="mt-4 text-sm text-slate-600">
         Already registered?{" "}
-        <Link href="/login" className="font-medium text-brand-700 underline-offset-2 hover:underline">
+        <Link href="/login" className="font-medium text-brand-400 underline-offset-2 hover:underline">
           Sign in
         </Link>
       </p>

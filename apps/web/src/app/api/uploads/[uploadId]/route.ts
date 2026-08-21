@@ -16,9 +16,6 @@ type Params = { params: Promise<{ uploadId: string }> };
  * manage the event may see it.
  */
 export async function GET(_request: Request, { params }: Params) {
-  const user = await getCurrentUser();
-  if (!user) return unauthorized();
-
   const idResult = uuidSchema.safeParse((await params).uploadId);
   if (!idResult.success) return fail(400, "INVALID_ID", "Invalid upload id.");
 
@@ -28,6 +25,23 @@ export async function GET(_request: Request, { params }: Params) {
       select: { id: true, kind: true, mimeType: true, data: true, uploadedById: true },
     });
     if (!upload) return notFound();
+
+    // Event posters are public: the events list renders them for signed-out
+    // visitors, so requiring a session here would break the front page.
+    if (upload.kind === UploadKind.EVENT_POSTER) {
+      return new Response(Buffer.from(upload.data), {
+        headers: {
+          "Content-Type": upload.mimeType,
+          "Content-Disposition": "inline",
+          // Content is immutable per id, so it can be cached hard.
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
+    const user = await getCurrentUser();
+    if (!user) return unauthorized();
 
     if (upload.kind === UploadKind.PAYMENT_PROOF) {
       const isUploader = upload.uploadedById === user.id;

@@ -53,7 +53,7 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
           <p className="mt-1 text-xs text-slate-500">Submitted {payment.submittedAt}</p>
         </div>
         <div className="text-left sm:text-right">
-          <p className="text-lg font-semibold text-slate-900">{payment.amountLabel}</p>
+          <p className="font-display text-xl font-normal text-slate-900">{payment.amountLabel}</p>
           <p className="text-sm text-slate-600">{payment.ticketTypeName}</p>
           <p className="mt-1 font-mono text-xs text-slate-700">
             {payment.upiTransactionId ? `UTR ${payment.upiTransactionId}` : "No UTR given"}
@@ -71,19 +71,19 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
           <img
             src={`/api/uploads/${payment.screenshotUploadId}`}
             alt={`Payment screenshot from ${payment.payer.name}`}
-            className="max-h-72 w-full rounded-lg object-contain ring-1 ring-slate-200"
+            className="media-reveal max-h-72 w-full rounded-lg bg-black/30 object-contain ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.01]"
           />
-          <span className="mt-1 block text-xs text-brand-700 underline-offset-2 hover:underline">
+          <span className="mt-1.5 block text-xs text-brand-400 underline-offset-2 hover:underline">
             Open full size
           </span>
         </a>
       ) : (
-        <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600">
+        <p className="rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-slate-600">
           No screenshot was uploaded.
         </p>
       )}
 
-      <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">
+      <p className="rounded-lg bg-amber-400/10 px-3 py-2.5 text-sm text-amber-200 ring-1 ring-inset ring-amber-400/30">
         <strong>Always confirm this payment in your own UPI or bank app before verifying.</strong>{" "}
         Screenshots and reference numbers can be faked.
       </p>
@@ -98,7 +98,7 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. No matching payment found in our account"
-            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+            className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25"
           />
           <div className="flex gap-2">
             <Button

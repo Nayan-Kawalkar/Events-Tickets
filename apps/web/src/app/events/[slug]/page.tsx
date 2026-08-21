@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma, EventStatus, ManualPaymentStatus, PaymentMode } from "@ct/db";
+import { Poster } from "@/components/poster";
 import { RegisterButton } from "@/components/register-button";
 import { Alert, ButtonLink, Card, EventStatusBadge, PageHeader } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -27,6 +28,7 @@ async function loadEvent(slug: string) {
       registrationClosesAt: true,
       status: true,
       capacity: true,
+      posterUploadId: true,
       _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
       ticketTypes: {
         orderBy: { pricePaise: "asc" },
@@ -57,10 +59,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function EventDetailPage({ params }: Props) {
   const { slug } = await params;
-  const event = await loadEvent(slug);
+  // Independent queries: issue them together rather than paying two
+  // round-trips to the database in series.
+  const [event, user] = await Promise.all([loadEvent(slug), getCurrentUser()]);
   if (!event) notFound();
 
-  const user = await getCurrentUser();
   const now = new Date();
 
   const registrationOpen =
@@ -75,21 +78,22 @@ export default async function EventDetailPage({ params }: Props) {
   const heldByType = new Map<string, number>();
   const pendingPayment = new Set<string>();
   if (user) {
-    const held = await prisma.ticket.groupBy({
-      by: ["ticketTypeId"],
-      where: {
-        ownerUserId: user.id,
-        eventId: event.id,
-        status: { in: LIVE_TICKET_STATUS_LIST },
-      },
-      _count: { _all: true },
-    });
+    const [held, claims] = await Promise.all([
+      prisma.ticket.groupBy({
+        by: ["ticketTypeId"],
+        where: {
+          ownerUserId: user.id,
+          eventId: event.id,
+          status: { in: LIVE_TICKET_STATUS_LIST },
+        },
+        _count: { _all: true },
+      }),
+      prisma.manualPayment.findMany({
+        where: { userId: user.id, eventId: event.id, status: ManualPaymentStatus.PENDING },
+        select: { ticketTypeId: true },
+      }),
+    ]);
     for (const row of held) heldByType.set(row.ticketTypeId, row._count._all);
-
-    const claims = await prisma.manualPayment.findMany({
-      where: { userId: user.id, eventId: event.id, status: ManualPaymentStatus.PENDING },
-      select: { ticketTypeId: true },
-    });
     for (const claim of claims) pendingPayment.add(claim.ticketTypeId);
   }
 
@@ -119,24 +123,41 @@ export default async function EventDetailPage({ params }: Props) {
 
   return (
     <>
-      <PageHeader
-        title={event.title}
-        description={event.venue ?? undefined}
-        action={<EventStatusBadge status={event.status} />}
-      />
+      {/* Poster hero: full-bleed on mobile, with the title over the gradient. */}
+      <section className="animate-rise mb-8 overflow-hidden rounded-2xl border border-white/8 bg-[#09201e]/90 shadow-xl shadow-black/40">
+        <div className="relative">
+          <Poster
+            uploadId={event.posterUploadId}
+            title={event.title}
+            ratio="wide"
+            priority
+            sizes="100vw"
+            className="rounded-none"
+          />
+          <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <EventStatusBadge status={event.status} />
+              {event.venue ? (
+                <span className="text-xs text-slate-700">{event.venue}</span>
+              ) : null}
+            </div>
+            <h1 className="text-display-lg text-slate-900 drop-shadow-lg">{event.title}</h1>
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
           <Card>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">About</h2>
-            <p className="mt-2 whitespace-pre-line text-sm text-slate-700">
+            <h2 className="text-eyebrow">About</h2>
+            <p className="prose-measure mt-3 whitespace-pre-line text-slate-700">
               {event.description ?? "Details will be announced shortly."}
             </p>
           </Card>
 
           <section aria-labelledby="ticket-types">
-            <h2 id="ticket-types" className="mb-3 text-lg font-semibold text-slate-900">
-              Ticket types
+            <h2 id="ticket-types" className="text-display mb-4 text-slate-900">
+              Tickets
             </h2>
 
             {event.ticketTypes.length === 0 ? (
@@ -204,7 +225,7 @@ export default async function EventDetailPage({ params }: Props) {
 
         <aside className="space-y-4">
           <Card>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Schedule</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Schedule</h2>
             <dl className="mt-2 space-y-2 text-sm">
               <div>
                 <dt className="font-medium text-slate-700">Starts</dt>

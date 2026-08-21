@@ -68,10 +68,10 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
               href={filter.value ? `/organizer/events?status=${filter.value}` : "/organizer/events"}
               aria-current={active ? "page" : undefined}
               className={cx(
-                "rounded-full border px-3 py-1.5 text-sm",
+                "rounded-full border px-3 py-1.5 text-sm transition-all duration-200",
                 active
-                  ? "border-brand-600 bg-brand-600 text-white"
-                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+                  ? "border-brand-500 bg-brand-500 font-medium text-[#04231c]"
+                  : "border-white/12 bg-white/[0.03] text-slate-700 hover:border-brand-500/50 hover:bg-brand-500/10 hover:text-brand-300",
               )}
             >
               {filter.label}
@@ -93,7 +93,7 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h2 className="font-medium text-slate-900">
-                      <Link href={`/organizer/events/${event.id}/edit`} className="hover:text-brand-700">
+                      <Link href={`/organizer/events/${event.id}/edit`} className="hover:text-brand-400">
                         {event.title}
                       </Link>
                     </h2>
@@ -109,7 +109,7 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
                   <EventStatusBadge status={event.status} />
                 </div>
 
-                <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                <div className="flex flex-wrap gap-2 border-t border-white/8 pt-3">
                   <ButtonLink href={`/organizer/events/${event.id}/edit`} variant="secondary">
                     Edit
                   </ButtonLink>

@@ -77,6 +77,7 @@ const eventFields = {
   registrationClosesAt: optionalDateTime,
   status: z.nativeEnum(EventStatus),
   capacity: optionalCapacity,
+  posterUploadId: z.string().uuid().optional().or(z.literal("")).or(z.null()),
 };
 
 /** Cross-field date rules shared by create and update. */

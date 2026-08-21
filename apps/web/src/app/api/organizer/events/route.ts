@@ -30,6 +30,7 @@ export async function POST(request: Request) {
         registrationClosesAt: input.registrationClosesAt,
         status: input.status,
         capacity: input.capacity,
+        posterUploadId: input.posterUploadId || null,
         // Ownership is set from the session, never from the request body.
         createdById: user.id,
       },

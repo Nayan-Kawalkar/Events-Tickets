@@ -67,7 +67,7 @@ export function ticketConfirmationEmail(params: {
   ticketTypeName: string;
   publicId: string;
 }): Mail {
-  const ticketUrl = `${env.APP_URL}/student/tickets/${params.publicId}`;
+  const ticketUrl = `${env.APP_URL}/tickets/${params.publicId}`;
 
   return {
     to: params.to,

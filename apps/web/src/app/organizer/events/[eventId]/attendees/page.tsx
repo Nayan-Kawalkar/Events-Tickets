@@ -17,15 +17,19 @@ type Props = {
 };
 
 export default async function AttendeesPage({ params, searchParams }: Props) {
-  const user = await requireRole([Role.ORGANIZER, Role.ADMIN]);
+  const [user, { eventId }, sp] = await Promise.all([
+    requireRole([Role.ORGANIZER, Role.ADMIN]),
+    params,
+    searchParams,
+  ]);
 
-  const idResult = uuidSchema.safeParse((await params).eventId);
+  const idResult = uuidSchema.safeParse(eventId);
   if (!idResult.success) notFound();
 
   const event = await findManageableEvent(user, idResult.data);
   if (!event) notFound();
 
-  const q = (await searchParams).q?.trim() ?? "";
+  const q = sp.q?.trim() ?? "";
 
   const tickets = await prisma.ticket.findMany({
     where: {
@@ -80,18 +84,18 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
           name="q"
           defaultValue={q}
           placeholder="Search name, email, roll number or ticket ID"
-          className="min-h-11 w-full max-w-md rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+          className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25 max-w-md"
         />
         <button
           type="submit"
-          className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium hover:bg-slate-50"
+          className="min-h-11 shrink-0 rounded-lg border border-white/12 bg-white/[0.03] px-4 text-sm font-medium text-slate-800 transition-all duration-200 hover:border-brand-500/60 hover:bg-brand-500/10 hover:text-brand-300"
         >
           Search
         </button>
         {q ? (
           <Link
             href={`/organizer/events/${event.id}/attendees`}
-            className="inline-flex min-h-11 items-center px-2 text-sm text-slate-600 hover:text-brand-700"
+            className="inline-flex min-h-11 items-center px-2 text-sm text-slate-600 hover:text-brand-400"
           >
             Clear
           </Link>
@@ -107,7 +111,7 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
         <Card className="overflow-x-auto p-0">
           <table className="w-full min-w-[46rem] text-left text-sm">
             <caption className="sr-only">Attendees for {event.title}</caption>
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wider text-slate-600">
               <tr>
                 <th scope="col" className="px-4 py-3">Name</th>
                 <th scope="col" className="px-4 py-3">Email</th>
@@ -117,9 +121,9 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
                 <th scope="col" className="px-4 py-3">Issued</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-white/6">
               {tickets.map((ticket) => (
-                <tr key={ticket.id}>
+                <tr key={ticket.id} className="row-hover">
                   <td className="px-4 py-3 font-medium text-slate-900">{ticket.owner.fullName}</td>
                   <td className="px-4 py-3 text-slate-600">{ticket.owner.email}</td>
                   <td className="px-4 py-3 text-slate-600">{ticket.owner.rollNumber ?? "—"}</td>

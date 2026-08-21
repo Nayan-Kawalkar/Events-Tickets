@@ -20,7 +20,8 @@ export type AuditAction =
   | "MANUAL_PAYMENT_REJECTED_AT_SUBMIT"
   | "MANUAL_PAYMENT_VERIFIED"
   | "MANUAL_PAYMENT_REJECTED"
-  | "UPI_QR_UPLOADED";
+  | "UPI_QR_UPLOADED"
+  | "EVENT_POSTER_UPLOADED";
 
 /**
  * Append an immutable audit record. Never throws — a logging failure must not

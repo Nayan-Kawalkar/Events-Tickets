@@ -8,11 +8,12 @@ import { storeUpload, UPLOAD_FAILURE_MESSAGES } from "@/lib/uploads";
 export const runtime = "nodejs";
 
 /**
- * Upload an organizer's UPI QR image.
+ * Upload an organizer asset: an event poster or a UPI QR image.
  *
  * Payment screenshots do NOT come through here — they are attached to the
  * payment submission itself, so an upload cannot exist without a claim.
  */
+const ALLOWED_KINDS = new Set<string>([UploadKind.EVENT_POSTER, UploadKind.UPI_QR]);
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return fail(403, "BAD_ORIGIN", "Request origin not allowed.");
 
@@ -31,9 +32,16 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Only the two organizer-owned kinds may be created here; a caller cannot
+    // mint a PAYMENT_PROOF and attach it to someone else's claim.
+    const requestedKind = String(form.get("kind") ?? UploadKind.UPI_QR);
+    if (!ALLOWED_KINDS.has(requestedKind)) {
+      return fail(422, "VALIDATION_FAILED", "Unsupported upload type.");
+    }
+
     const stored = await storeUpload({
       file: form.get("file"),
-      kind: UploadKind.UPI_QR,
+      kind: requestedKind as UploadKind,
       uploadedById: user.id,
     });
 
@@ -47,7 +55,7 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       entityType: "Upload",
       entityId: stored.uploadId,
-      action: "UPI_QR_UPLOADED",
+      action: requestedKind === UploadKind.EVENT_POSTER ? "EVENT_POSTER_UPLOADED" : "UPI_QR_UPLOADED",
       metadata: { sizeBytes: stored.sizeBytes, mimeType: stored.mimeType },
     });
 

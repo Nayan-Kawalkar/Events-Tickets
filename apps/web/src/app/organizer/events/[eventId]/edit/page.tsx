@@ -101,6 +101,7 @@ export default async function EditEventPage({ params }: Props) {
             registrationClosesAt: toDateTimeLocal(event.registrationClosesAt),
             status: event.status,
             capacity: event.capacity === null ? "" : String(event.capacity),
+            posterUploadId: event.posterUploadId ?? "",
           }}
         />
 

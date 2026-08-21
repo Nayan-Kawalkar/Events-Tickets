@@ -47,7 +47,7 @@ export function RegisterButton({
     }
 
     toast.push("success", "Ticket issued. Check your email for confirmation.");
-    router.push(`/student/tickets/${result.data.ticket.publicId}?new=1`);
+    router.push(`/tickets/${result.data.ticket.publicId}?new=1`);
     router.refresh();
   }
 

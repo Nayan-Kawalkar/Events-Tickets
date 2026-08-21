@@ -1,8 +1,24 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { BottomNav } from "@/components/site-nav";
 import { ToastProvider } from "@/components/toast";
 import { getCurrentUser } from "@/lib/auth";
+
+// Self-hosted at build time by next/font — no third-party request at runtime.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-playfair",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -15,29 +31,33 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#2f49b2",
+  themeColor: "#041413",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
 
   return (
-    <html lang="en">
-      <body className="min-h-dvh">
+    <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
+      <body className="flex min-h-dvh flex-col">
         <ToastProvider>
           <a
             href="#main"
-            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:shadow"
+            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-brand-500 focus:px-4 focus:py-2 focus:font-medium focus:text-[#04231c]"
           >
             Skip to content
           </a>
+
           <SiteHeader user={user} />
-          <main id="main" className="mx-auto w-full max-w-5xl px-4 py-8">
+
+          <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:py-10">
             {children}
           </main>
-          <footer className="mx-auto w-full max-w-5xl px-4 pb-10 pt-4 text-xs text-slate-500">
-            Bring your college ID to every event. Tickets are personal and single-use.
-          </footer>
+
+          <SiteFooter />
+          <BottomNav
+            user={user ? { fullName: user.fullName, email: user.email, role: user.role } : null}
+          />
         </ToastProvider>
       </body>
     </html>

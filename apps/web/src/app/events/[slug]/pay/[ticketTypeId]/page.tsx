@@ -15,24 +15,27 @@ type Props = { params: Promise<{ slug: string; ticketTypeId: string }> };
 
 export default async function ManualPayPage({ params }: Props) {
   const { slug, ticketTypeId } = await params;
-  const user = await requireUser(`/events/${slug}/pay/${ticketTypeId}`);
 
   const idResult = uuidSchema.safeParse(ticketTypeId);
   if (!idResult.success) notFound();
 
-  const ticketType = await prisma.ticketType.findUnique({
-    where: { id: idResult.data },
-    select: {
-      id: true,
-      name: true,
-      pricePaise: true,
-      paymentMode: true,
-      organizerUpiId: true,
-      organizerUpiName: true,
-      organizerUpiQrUploadId: true,
-      event: { select: { id: true, slug: true, title: true, status: true } },
-    },
-  });
+  // The session lookup and the ticket-type read do not depend on each other.
+  const [user, ticketType] = await Promise.all([
+    requireUser(`/events/${slug}/pay/${ticketTypeId}`),
+    prisma.ticketType.findUnique({
+      where: { id: idResult.data },
+      select: {
+        id: true,
+        name: true,
+        pricePaise: true,
+        paymentMode: true,
+        organizerUpiId: true,
+        organizerUpiName: true,
+        organizerUpiQrUploadId: true,
+        event: { select: { id: true, slug: true, title: true, status: true } },
+      },
+    }),
+  ]);
 
   // Only reachable for a manual-UPI type on this event's page.
   if (
@@ -70,7 +73,7 @@ export default async function ManualPayPage({ params }: Props) {
           <Alert tone="info">
             You already have a payment awaiting verification for this ticket. You do not need to
             pay again —{" "}
-            <Link href="/student/payments" className="font-medium underline">
+            <Link href="/payments" className="font-medium underline">
               check its status
             </Link>
             .
@@ -80,7 +83,7 @@ export default async function ManualPayPage({ params }: Props) {
 
       <div className="space-y-5">
         <Card className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
             Step 1 — Pay by UPI
           </h2>
 
@@ -88,7 +91,7 @@ export default async function ManualPayPage({ params }: Props) {
             <img
               src={`/api/uploads/${ticketType.organizerUpiQrUploadId}`}
               alt={`UPI QR code for ${ticketType.organizerUpiName ?? "the organizer"}`}
-              className="mx-auto w-full max-w-xs rounded-xl ring-1 ring-slate-200"
+              className="mx-auto w-full max-w-xs rounded-xl ring-1 ring-white/10"
             />
           ) : null}
 
@@ -114,7 +117,7 @@ export default async function ManualPayPage({ params }: Props) {
           {upiLink ? (
             <a
               href={upiLink}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-[#04231c] transition-all duration-200 hover:bg-brand-400 hover:shadow-[0_8px_24px_-6px_rgba(43,220,163,0.55)]"
             >
               Open UPI app
             </a>
@@ -127,7 +130,7 @@ export default async function ManualPayPage({ params }: Props) {
         </Card>
 
         <Card className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
             Step 2 — Send us the proof
           </h2>
           <p className="text-sm text-slate-600">
@@ -145,7 +148,7 @@ export default async function ManualPayPage({ params }: Props) {
         <p className="text-sm text-slate-600">
           <Link
             href={`/events/${slug}`}
-            className="font-medium text-brand-700 underline-offset-2 hover:underline"
+            className="font-medium text-brand-400 underline-offset-2 hover:underline"
           >
             ← Back to the event
           </Link>

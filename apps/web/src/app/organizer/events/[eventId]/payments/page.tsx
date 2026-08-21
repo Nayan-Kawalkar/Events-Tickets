@@ -93,7 +93,7 @@ export default async function PaymentsPage({ params }: Props) {
       </div>
 
       <section aria-labelledby="queue" className="mb-10">
-        <h2 id="queue" className="mb-3 text-lg font-semibold text-slate-900">
+        <h2 id="queue" className="mb-3 font-display text-xl font-normal text-slate-900">
           Awaiting verification
         </h2>
 
@@ -111,7 +111,7 @@ export default async function PaymentsPage({ params }: Props) {
       </section>
 
       <section aria-labelledby="handled">
-        <h2 id="handled" className="mb-3 text-lg font-semibold text-slate-900">
+        <h2 id="handled" className="mb-3 font-display text-xl font-normal text-slate-900">
           Already handled
         </h2>
 
@@ -132,15 +132,15 @@ export default async function PaymentsPage({ params }: Props) {
                       {payment.verifiedBy ? ` by ${payment.verifiedBy.fullName}` : ""}
                     </p>
                     {payment.rejectionReason ? (
-                      <p className="text-xs text-red-700">Reason: {payment.rejectionReason}</p>
+                      <p className="text-xs text-red-300">Reason: {payment.rejectionReason}</p>
                     ) : null}
                   </div>
                   <span
                     className={cx(
                       "inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
                       payment.status === ManualPaymentStatus.VERIFIED
-                        ? "bg-emerald-50 text-emerald-800 ring-emerald-300"
-                        : "bg-red-50 text-red-800 ring-red-300",
+                        ? "bg-brand-500/12 text-brand-300 ring-brand-500/40"
+                        : "bg-red-500/10 text-red-300 ring-red-400/30",
                     )}
                   >
                     {payment.status.toLowerCase()}
