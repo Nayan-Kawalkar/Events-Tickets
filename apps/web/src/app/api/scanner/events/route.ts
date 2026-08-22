@@ -1,6 +1,6 @@
-import { prisma, EventStatus, Role } from "@ct/db";
+import { prisma, EventStatus } from "@ct/db";
 import { getCurrentUser } from "@/lib/auth";
-import { canAccessOrganizerArea } from "@/lib/authz";
+import { canUseScanner, scannableEventsWhere } from "@/lib/authz";
 import { ok, forbidden, serverError, unauthorized } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -9,13 +9,13 @@ export const runtime = "nodejs";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
-  if (!canAccessOrganizerArea(user)) return forbidden();
+  if (!canUseScanner(user)) return forbidden();
 
   try {
     const events = await prisma.event.findMany({
       where: {
         status: { in: [EventStatus.PUBLISHED, EventStatus.CLOSED] },
-        ...(user.role === Role.ADMIN ? {} : { createdById: user.id }),
+        ...scannableEventsWhere(user),
       },
       orderBy: { startsAt: "asc" },
       select: { id: true, title: true, startsAt: true, venue: true },

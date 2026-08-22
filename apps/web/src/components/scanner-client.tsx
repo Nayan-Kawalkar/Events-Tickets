@@ -26,8 +26,17 @@ const RESET_MS = 1400;
  */
 const DUPLICATE_COOLDOWN_MS = 6000;
 
-export function ScannerClient({ events }: { events: ScannerEvent[] }) {
-  const [eventId, setEventId] = useState(events[0]?.id ?? "");
+export function ScannerClient({
+  events,
+  initialEventId,
+}: {
+  events: ScannerEvent[];
+  initialEventId?: string;
+}) {
+  // Only honour the hint if it names an event this scanner may actually work.
+  const [eventId, setEventId] = useState(
+    events.some((e) => e.id === initialEventId) ? initialEventId! : (events[0]?.id ?? ""),
+  );
   const [gateId, setGateId] = useState("DEFAULT");
   const [scanning, setScanning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -343,6 +352,16 @@ export function ScannerClient({ events }: { events: ScannerEvent[] }) {
           <p role="alert" className="text-sm font-medium text-red-300">
             {cameraError}
           </p>
+        ) : null}
+
+        {/* Phone dead or QR unreadable: find the person by name instead. */}
+        {eventId ? (
+          <a
+            href={`/organizer/events/${eventId}/attendees`}
+            className="block text-center text-xs text-slate-500 underline-offset-2 hover:text-brand-300 hover:underline"
+          >
+            Can&apos;t scan? Find the attendee by name →
+          </a>
         ) : null}
 
         <form

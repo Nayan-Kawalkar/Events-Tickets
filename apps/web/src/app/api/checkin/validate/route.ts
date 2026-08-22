@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
-import { canAccessOrganizerArea } from "@/lib/authz";
+import { canUseScanner } from "@/lib/authz";
 import { logCheckinAttempt, validateAndConsume } from "@/lib/checkin";
 import { ok, fail, forbidden, parseJson, sameOrigin, serverError, tooManyRequests, unauthorized } from "@/lib/api";
 import { rateLimit } from "@/lib/rate-limit";
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
   const user = await getCurrentUser();
   if (!user) return unauthorized();
-  if (!canAccessOrganizerArea(user)) return forbidden();
+  if (!canUseScanner(user)) return forbidden();
 
   const parsed = await parseJson(request, bodySchema);
   if (!parsed.ok) return parsed.response;

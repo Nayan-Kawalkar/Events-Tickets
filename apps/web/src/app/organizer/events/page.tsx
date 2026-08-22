@@ -42,6 +42,8 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
       startsAt: true,
       venue: true,
       capacity: true,
+      hostOrganization: true,
+      posterUploadId: true,
       _count: {
         select: {
           ticketTypes: true,
@@ -97,6 +99,9 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
                         {event.title}
                       </Link>
                     </h2>
+                    {event.hostOrganization ? (
+                      <p className="text-xs font-medium text-brand-300">{event.hostOrganization}</p>
+                    ) : null}
                     <p className="text-sm text-slate-600">
                       {formatDateTime(event.startsAt)}
                       {event.venue ? ` · ${event.venue}` : ""}
@@ -110,17 +115,12 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
                 </div>
 
                 <div className="-mx-1 flex gap-2 overflow-x-auto border-t border-white/8 px-1 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">
-                  <ButtonLink href={`/organizer/events/${event.id}/edit`} variant="secondary">
-                    Edit
-                  </ButtonLink>
+                  <ButtonLink href={`/organizer/events/${event.id}`}>Manage</ButtonLink>
                   <ButtonLink href={`/organizer/events/${event.id}/attendees`} variant="secondary">
-                    View attendees
+                    Guest list
                   </ButtonLink>
-                  <ButtonLink href={`/organizer/events/${event.id}/payments`} variant="secondary">
-                    Payments
-                  </ButtonLink>
-                  <ButtonLink href="/scanner" variant="secondary">
-                    Scanner
+                  <ButtonLink href={`/scanner?event=${event.id}`} variant="secondary">
+                    Scan
                   </ButtonLink>
                   <EventStatusActions eventId={event.id} status={event.status} />
                 </div>

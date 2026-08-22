@@ -151,6 +151,22 @@
       "namedRegex": "^/api/organizer/events/(?<nxtPeventId>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/organizer/events/[eventId]/hosts",
+      "regex": "^/api/organizer/events/([^/]+?)/hosts(?:/)?$",
+      "routeKeys": {
+        "nxtPeventId": "nxtPeventId"
+      },
+      "namedRegex": "^/api/organizer/events/(?<nxtPeventId>[^/]+?)/hosts(?:/)?$"
+    },
+    {
+      "page": "/api/organizer/events/[eventId]/scanners",
+      "regex": "^/api/organizer/events/([^/]+?)/scanners(?:/)?$",
+      "routeKeys": {
+        "nxtPeventId": "nxtPeventId"
+      },
+      "namedRegex": "^/api/organizer/events/(?<nxtPeventId>[^/]+?)/scanners(?:/)?$"
+    },
+    {
       "page": "/api/organizer/events/[eventId]/ticket-types",
       "regex": "^/api/organizer/events/([^/]+?)/ticket\\-types(?:/)?$",
       "routeKeys": {
@@ -159,12 +175,28 @@
       "namedRegex": "^/api/organizer/events/(?<nxtPeventId>[^/]+?)/ticket\\-types(?:/)?$"
     },
     {
+      "page": "/api/organizer/hosts/[hostId]",
+      "regex": "^/api/organizer/hosts/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPhostId": "nxtPhostId"
+      },
+      "namedRegex": "^/api/organizer/hosts/(?<nxtPhostId>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/api/organizer/manual-payments/[paymentId]",
       "regex": "^/api/organizer/manual\\-payments/([^/]+?)(?:/)?$",
       "routeKeys": {
         "nxtPpaymentId": "nxtPpaymentId"
       },
       "namedRegex": "^/api/organizer/manual\\-payments/(?<nxtPpaymentId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/organizer/scanner-assignments/[assignmentId]",
+      "regex": "^/api/organizer/scanner\\-assignments/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPassignmentId": "nxtPassignmentId"
+      },
+      "namedRegex": "^/api/organizer/scanner\\-assignments/(?<nxtPassignmentId>[^/]+?)(?:/)?$"
     },
     {
       "page": "/api/organizer/ticket-types/[ticketTypeId]",
@@ -207,6 +239,14 @@
         "nxtPticketTypeId": "nxtPticketTypeId"
       },
       "namedRegex": "^/events/(?<nxtPslug>[^/]+?)/register/(?<nxtPticketTypeId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/organizer/events/[eventId]",
+      "regex": "^/organizer/events/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPeventId": "nxtPeventId"
+      },
+      "namedRegex": "^/organizer/events/(?<nxtPeventId>[^/]+?)(?:/)?$"
     },
     {
       "page": "/organizer/events/[eventId]/attendees",
@@ -279,6 +319,12 @@
       "regex": "^/admin/logs(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/admin/logs(?:/)?$"
+    },
+    {
+      "page": "/admin/super-pass",
+      "regex": "^/admin/super\\-pass(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/super\\-pass(?:/)?$"
     },
     {
       "page": "/admin/tickets",

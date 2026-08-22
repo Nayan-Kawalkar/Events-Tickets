@@ -23,6 +23,12 @@ export type EventFormValues = {
   status: EventStatus;
   capacity: string;
   posterUploadId: string;
+  hostOrganization: string;
+  addressLine: string;
+  latitude: string;
+  longitude: string;
+  contactEmail: string;
+  contactPhone: string;
 };
 
 export const emptyEvent: EventFormValues = {
@@ -37,6 +43,12 @@ export const emptyEvent: EventFormValues = {
   status: EventStatus.DRAFT,
   capacity: "",
   posterUploadId: "",
+  hostOrganization: "",
+  addressLine: "",
+  latitude: "",
+  longitude: "",
+  contactEmail: "",
+  contactPhone: "",
 };
 
 export function EventForm({
@@ -79,6 +91,12 @@ export function EventForm({
       status: values.status,
       capacity: values.capacity,
       posterUploadId: values.posterUploadId || null,
+      hostOrganization: values.hostOrganization,
+      addressLine: values.addressLine,
+      latitude: values.latitude,
+      longitude: values.longitude,
+      contactEmail: values.contactEmail,
+      contactPhone: values.contactPhone,
     };
 
     const result = isEdit
@@ -153,9 +171,108 @@ export function EventForm({
           />
         </Field>
 
-        <Field label="Venue" htmlFor="venue" error={fields.venue}>
-          <TextInput id="venue" value={values.venue} error={fields.venue} onChange={(e) => set("venue", e.target.value)} />
+        <Field
+          label="Hosted by"
+          htmlFor="hostOrganization"
+          error={fields.hostOrganization}
+          hint="Club, department or committee. Shown above the event title."
+        >
+          <TextInput
+            id="hostOrganization"
+            value={values.hostOrganization}
+            error={fields.hostOrganization}
+            onChange={(e) => set("hostOrganization", e.target.value)}
+          />
         </Field>
+
+        <fieldset className="rounded-lg border border-white/10 p-3">
+          <legend className="px-1 text-sm font-medium text-slate-800">Location</legend>
+
+          <div className="space-y-3">
+            <Field
+              label="Venue name"
+              htmlFor="venue"
+              error={fields.venue}
+              hint="Short label used in listings, e.g. Main Auditorium."
+            >
+              <TextInput
+                id="venue"
+                value={values.venue}
+                error={fields.venue}
+                onChange={(e) => set("venue", e.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Full address"
+              htmlFor="addressLine"
+              error={fields.addressLine}
+              hint="Shown on the event page and used to open the map."
+            >
+              <TextArea
+                id="addressLine"
+                value={values.addressLine}
+                error={fields.addressLine}
+                onChange={(e) => set("addressLine", e.target.value)}
+              />
+            </Field>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Latitude"
+                htmlFor="latitude"
+                error={fields.latitude}
+                hint="Optional. Pins the map exactly."
+              >
+                <TextInput
+                  id="latitude"
+                  value={values.latitude}
+                  error={fields.latitude}
+                  inputMode="decimal"
+                  placeholder="21.0951"
+                  onChange={(e) => set("latitude", e.target.value)}
+                />
+              </Field>
+              <Field label="Longitude" htmlFor="longitude" error={fields.longitude}>
+                <TextInput
+                  id="longitude"
+                  value={values.longitude}
+                  error={fields.longitude}
+                  inputMode="decimal"
+                  placeholder="79.0034"
+                  onChange={(e) => set("longitude", e.target.value)}
+                />
+              </Field>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset className="rounded-lg border border-white/10 p-3">
+          <legend className="px-1 text-sm font-medium text-slate-800">Contact</legend>
+          <p className="mb-3 text-xs text-slate-500">
+            Shown publicly so attendees can reach you before the event.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Contact email" htmlFor="contactEmail" error={fields.contactEmail}>
+              <TextInput
+                id="contactEmail"
+                type="email"
+                value={values.contactEmail}
+                error={fields.contactEmail}
+                onChange={(e) => set("contactEmail", e.target.value)}
+              />
+            </Field>
+            <Field label="Contact phone" htmlFor="contactPhone" error={fields.contactPhone}>
+              <TextInput
+                id="contactPhone"
+                type="tel"
+                value={values.contactPhone}
+                error={fields.contactPhone}
+                onChange={(e) => set("contactPhone", e.target.value)}
+              />
+            </Field>
+          </div>
+        </fieldset>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Starts at" htmlFor="startsAt" error={fields.startsAt} required>

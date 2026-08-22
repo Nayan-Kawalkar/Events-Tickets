@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { prisma, Role } from "@ct/db";
+import { prisma, Role, TicketStatus } from "@ct/db";
+import { ManualCheckinButton } from "@/components/manual-checkin";
 import { ButtonLink, Card, EmptyState, PageHeader, TicketStatusBadge } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { findManageableEvent } from "@/lib/authz";
@@ -71,9 +72,13 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
         title={`Attendees · ${event.title}`}
         description={`${tickets.length} ticket(s)${q ? " matching your search" : ""}`}
         action={
-          <div className="flex gap-2">
-            <ButtonLink href={`/organizer/events/${event.id}/edit`} variant="secondary">
-              Edit event
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href={`/scanner?event=${event.id}`}>Scan tickets</ButtonLink>
+            <ButtonLink href={`/organizer/events/${event.id}/payments`} variant="secondary">
+              Payments
+            </ButtonLink>
+            <ButtonLink href={`/organizer/events/${event.id}`} variant="secondary">
+              Event
             </ButtonLink>
             {/* Full-page navigation so the browser handles the file download. */}
             <ButtonLink href={`/organizer/events/${event.id}/attendees/export`} prefetch={false}>
@@ -82,6 +87,13 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
           </div>
         }
       />
+
+      <p className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-600">
+        <strong className="text-slate-800">Can&apos;t scan a ticket?</strong> Search for the
+        attendee and use <strong className="text-slate-800">Check in</strong> — for a dead phone,
+        a cracked screen or a QR the camera will not read. Check their college ID first; every
+        manual admission is recorded.
+      </p>
 
       <form method="get" className="mb-5 flex flex-wrap gap-2" role="search">
         <label htmlFor="q" className="sr-only">
@@ -128,6 +140,9 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
                 <th scope="col" className="px-4 py-3">Ticket type</th>
                 <th scope="col" className="px-4 py-3">Status</th>
                 <th scope="col" className="px-4 py-3">Issued</th>
+                <th scope="col" className="px-4 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/6">
@@ -142,6 +157,15 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
                     <TicketStatusBadge status={ticket.status} />
                   </td>
                   <td className="px-4 py-3 text-slate-600">{formatDateTime(ticket.issuedAt)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {ticket.status === TicketStatus.ISSUED ? (
+                      <ManualCheckinButton
+                        eventId={event.id}
+                        ticketId={ticket.id}
+                        attendeeName={ticket.attendeeName ?? ticket.owner.fullName}
+                      />
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -178,6 +202,15 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
                     <dd className="text-slate-700">{formatDateTime(ticket.issuedAt)}</dd>
                   </div>
                 </dl>
+                {ticket.status === TicketStatus.ISSUED ? (
+                  <div className="border-t border-white/8 pt-3">
+                    <ManualCheckinButton
+                      eventId={event.id}
+                      ticketId={ticket.id}
+                      attendeeName={ticket.attendeeName ?? ticket.owner.fullName}
+                    />
+                  </div>
+                ) : null}
               </Card>
             </li>
           ))}

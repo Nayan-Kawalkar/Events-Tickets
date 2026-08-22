@@ -31,6 +31,12 @@ export async function POST(request: Request) {
         status: input.status,
         capacity: input.capacity,
         posterUploadId: input.posterUploadId || null,
+        hostOrganization: input.hostOrganization || null,
+        addressLine: input.addressLine || null,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        contactEmail: input.contactEmail,
+        contactPhone: input.contactPhone || null,
         // Ownership is set from the session, never from the request body.
         createdById: user.id,
       },

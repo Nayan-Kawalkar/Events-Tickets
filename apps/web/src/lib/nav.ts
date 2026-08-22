@@ -37,7 +37,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: "/", label: "Events", icon: "home" },
   { href: "/tickets", label: "My Tickets", icon: "ticket", authOnly: true },
   { href: "/organizer", label: "For Organizers", icon: "plus", roles: [Role.ORGANIZER, Role.ADMIN] },
-  { href: "/scanner", label: "Scanner", icon: "scan", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/scanner", label: "Scanner", icon: "scan", roles: [Role.SCANNER, Role.ORGANIZER, Role.ADMIN] },
   { href: "/admin", label: "Admin", icon: "shield", roles: [Role.ADMIN] },
 ];
 
@@ -51,7 +51,7 @@ export const ACCOUNT_NAV: NavItem[] = [
 export const ORGANIZER_NAV: NavItem[] = [
   { href: "/organizer", label: "Dashboard", icon: "dashboard", roles: [Role.ORGANIZER, Role.ADMIN] },
   { href: "/organizer/events", label: "My Events", icon: "calendar", roles: [Role.ORGANIZER, Role.ADMIN] },
-  { href: "/scanner", label: "Scanner", icon: "scan", roles: [Role.ORGANIZER, Role.ADMIN] },
+  { href: "/scanner", label: "Scanner", icon: "scan", roles: [Role.SCANNER, Role.ORGANIZER, Role.ADMIN] },
   { href: "/admin", label: "Admin", icon: "shield", roles: [Role.ADMIN] },
 ];
 

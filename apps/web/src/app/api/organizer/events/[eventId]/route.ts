@@ -86,6 +86,16 @@ export async function PATCH(request: Request, { params }: Params) {
         ...(input.posterUploadId !== undefined
           ? { posterUploadId: (input.posterUploadId as string) || null }
           : {}),
+        ...(input.hostOrganization !== undefined
+          ? { hostOrganization: (input.hostOrganization as string) || null }
+          : {}),
+        ...(input.addressLine !== undefined ? { addressLine: (input.addressLine as string) || null } : {}),
+        ...(input.latitude !== undefined ? { latitude: input.latitude as number | null } : {}),
+        ...(input.longitude !== undefined ? { longitude: input.longitude as number | null } : {}),
+        ...(input.contactEmail !== undefined ? { contactEmail: input.contactEmail as string | null } : {}),
+        ...(input.contactPhone !== undefined
+          ? { contactPhone: (input.contactPhone as string) || null }
+          : {}),
       },
       select: { id: true, slug: true, title: true, status: true },
     });

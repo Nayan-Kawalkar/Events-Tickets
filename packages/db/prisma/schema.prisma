@@ -17,6 +17,9 @@ datasource db {
 
 enum Role {
   STUDENT
+  /// Gate volunteer. May scan tickets at assigned events and nothing else —
+  /// no editing, no attendee list, no exports.
+  SCANNER
   ORGANIZER
   ADMIN
 }
@@ -52,6 +55,13 @@ enum UploadKind {
   PAYMENT_PROOF
 }
 
+enum SuperPassStatus {
+  ACTIVE
+  USED
+  REVOKED
+  EXPIRED
+}
+
 enum TicketStatus {
   ISSUED
   CANCELLED
@@ -81,6 +91,10 @@ model User {
   uploads        Upload[]        @relation("UploadOwner")
   manualPayments ManualPayment[] @relation("ManualPaymentPayer")
   verifiedPayments ManualPayment[] @relation("ManualPaymentVerifier")
+  scannerAssignments ScannerAssignment[] @relation("ScannerUser")
+  scannerAssignmentsMade ScannerAssignment[] @relation("ScannerAssigner")
+  superPassesCreated SuperPass[]   @relation("SuperPassCreator")
+  superPassesScanned SuperPass[]   @relation("SuperPassScanner")
 
   @@index([role])
   @@map("users")
@@ -100,6 +114,17 @@ model Event {
   capacity              Int?
   bannerUrl             String?
   posterUploadId        String?     @db.Uuid
+
+  /// Who is putting the event on, shown above the title (e.g. a club name).
+  hostOrganization      String?
+  /// Full postal address. `venue` stays the short label used in listings.
+  addressLine           String?
+  /// Optional precise pin. When absent the map falls back to the address text.
+  latitude              Float?
+  longitude             Float?
+  /// Contact route for attendees with questions.
+  contactEmail          String?
+  contactPhone          String?
   // Nullable until the organization model lands in a later phase.
   organizationId        String?     @db.Uuid
   createdById           String      @db.Uuid
@@ -112,6 +137,9 @@ model Event {
   checkinAttempts CheckinAttempt[]
   manualPayments  ManualPayment[]
   poster          Upload?      @relation("EventPoster", fields: [posterUploadId], references: [id], onDelete: SetNull)
+  hosts           EventHost[]
+  scannerAssignments ScannerAssignment[]
+  superPassUses   SuperPass[]
 
   @@index([status, startsAt])
   @@index([createdById])
@@ -164,9 +192,7 @@ model Ticket {
   ///
   /// A snapshot, not a link to the profile: the person at the gate is whoever
   /// was named when the ticket was bought, and a later profile edit must not
-  /// rewrite the attendee list an organizer already printed. Nullable because
-  /// tickets issued before this existed have no snapshot — read them through
-  /// the owner as a fallback.
+  /// rewrite an attendee list the organizer already printed.
   attendeeName       String?
   attendeeEmail      String?
   attendeePhone      String?
@@ -293,4 +319,75 @@ model ManualPayment {
   @@index([eventId, status])
   @@index([userId])
   @@map("manual_payments")
+}
+
+/// An admin-issued master pass that opens any gate, exactly once.
+///
+/// This bypasses ticketing entirely, so it is deliberately constrained: one use,
+/// a short expiry, revocable, and every issue and use is audited. Generating a
+/// new pass revokes any earlier active one, so at most one master key is live.
+model SuperPass {
+  id              String          @id @default(uuid()) @db.Uuid
+  /// Random and unguessable. Carried inside the signed QR payload.
+  code            String          @unique
+  label           String?
+  status          SuperPassStatus @default(ACTIVE)
+  expiresAt       DateTime        @db.Timestamptz(6)
+  createdByUserId String          @db.Uuid
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+
+  usedAt       DateTime? @db.Timestamptz(6)
+  usedByUserId String?   @db.Uuid
+  usedEventId  String?   @db.Uuid
+  usedGateId   String?
+
+  createdBy User   @relation("SuperPassCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  usedBy    User?  @relation("SuperPassScanner", fields: [usedByUserId], references: [id], onDelete: SetNull)
+  usedEvent Event? @relation(fields: [usedEventId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("super_passes")
+}
+
+/// A person credited as running the event, shown on the public page.
+model EventHost {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @db.Uuid
+  name      String
+  title     String?
+  photoUrl  String?
+  instagram String?
+  twitter   String?
+  linkedin  String?
+  email     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, sortOrder])
+  @@map("event_hosts")
+}
+
+/// Grants one volunteer the right to scan one event.
+///
+/// The role alone is not enough: a SCANNER with no assignment can open the
+/// scanner page but has no event to work. Access is therefore revoked by
+/// deleting a row, without touching the person's account.
+model ScannerAssignment {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  eventId          String   @db.Uuid
+  /// Optional gate label pre-filled for this volunteer.
+  gateId           String?
+  assignedByUserId String   @db.Uuid
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+
+  user       User  @relation("ScannerUser", fields: [userId], references: [id], onDelete: Cascade)
+  event      Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignedBy User  @relation("ScannerAssigner", fields: [assignedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, eventId])
+  @@index([eventId])
+  @@map("scanner_assignments")
 }

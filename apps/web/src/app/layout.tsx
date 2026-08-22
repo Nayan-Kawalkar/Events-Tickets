@@ -50,7 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
           <SiteHeader user={user} />
 
-          <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:py-10">
+          <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-24 pt-6 sm:py-10 md:pb-10">
             {children}
           </main>
 

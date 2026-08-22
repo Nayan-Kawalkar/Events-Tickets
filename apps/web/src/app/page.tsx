@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { prisma, EventStatus } from "@ct/db";
+import { prisma, EventStatus, type TicketStatus } from "@ct/db";
 import { Poster } from "@/components/poster";
-import { ButtonLink, EmptyState } from "@/components/ui";
+import { ButtonLink, EmptyState, TicketStatusBadge } from "@/components/ui";
+import { getCurrentUser } from "@/lib/auth";
 import { formatPrice } from "@/lib/format";
 import { LIVE_TICKET_STATUS_LIST } from "@/lib/ticket-status";
 
@@ -30,7 +31,22 @@ type EventRow = {
   ticketTypes: { pricePaise: number }[];
 };
 
+type BookedRow = {
+  publicId: string;
+  status: TicketStatus;
+  ticketType: { name: string };
+  event: {
+    slug: string;
+    title: string;
+    venue: string | null;
+    startsAt: Date;
+    posterUploadId: string | null;
+  };
+};
+
 export default async function HomePage() {
+  const user = await getCurrentUser();
+
   // Only published events are ever exposed publicly.
   const events: EventRow[] = await prisma.event.findMany({
     where: { status: EventStatus.PUBLISHED },
@@ -49,6 +65,34 @@ export default async function HomePage() {
     },
   });
 
+  // Events this person is already going to. Past events drop off on their own
+  // so the section stays a to-do list rather than a history.
+  const booked: BookedRow[] = user
+    ? await prisma.ticket.findMany({
+        where: {
+          ownerUserId: user.id,
+          status: { in: LIVE_TICKET_STATUS_LIST },
+          event: { endsAt: { gte: new Date() } },
+        },
+        orderBy: { event: { startsAt: "asc" } },
+        take: 12,
+        select: {
+          publicId: true,
+          status: true,
+          ticketType: { select: { name: true } },
+          event: {
+            select: {
+              slug: true,
+              title: true,
+              venue: true,
+              startsAt: true,
+              posterUploadId: true,
+            },
+          },
+        },
+      })
+    : [];
+
   const [featured, ...rest] = events;
 
   return (
@@ -62,31 +106,83 @@ export default async function HomePage() {
         </p>
       </header>
 
+      {/* Order: the next event first, then what you are already going to,
+          then everything else. */}
+      {events.length > 0 ? <FeaturedEvent event={featured!} /> : null}
+
+      {booked.length > 0 ? (
+        <section aria-labelledby="my-events">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 id="my-events" className="text-display text-slate-900">
+              My events
+            </h2>
+            <ButtonLink href="/tickets" variant="secondary">
+              All tickets
+            </ButtonLink>
+          </div>
+
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {booked.map((ticket) => (
+              <li key={ticket.publicId}>
+                <article className="spotlight card-interactive group relative flex h-full gap-3 overflow-hidden rounded-xl border border-brand-500/25 bg-[#09201e]/90 p-3 shadow-lg shadow-black/40">
+                  <Poster
+                    uploadId={ticket.event.posterUploadId}
+                    title={ticket.event.title}
+                    ratio="poster"
+                    sizes="80px"
+                    className="w-20 shrink-0"
+                  />
+
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="truncate font-medium text-slate-900">
+                        <Link
+                          href={`/tickets/${ticket.publicId}`}
+                          className="transition-colors after:absolute after:inset-0 hover:text-brand-300"
+                        >
+                          {ticket.event.title}
+                        </Link>
+                      </h3>
+                      <TicketStatusBadge status={ticket.status} />
+                    </div>
+
+                    <p className="mt-1 text-xs text-slate-600">
+                      {whenFormatter.format(ticket.event.startsAt)}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {ticket.event.venue ?? "Venue to be announced"}
+                    </p>
+
+                    <p className="mt-auto pt-2 text-xs font-medium text-brand-400">
+                      {ticket.ticketType.name} · View ticket →
+                    </p>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {events.length === 0 ? (
         <EmptyState
           title="No events published yet"
           description="Check back soon — organizers publish events here once registration opens."
         />
-      ) : (
-        <>
-          <FeaturedEvent event={featured!} />
-
-          {rest.length > 0 ? (
-            <section aria-labelledby="more-events">
-              <h2 id="more-events" className="text-display mb-5 text-slate-900">
-                More events
-              </h2>
-              <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {rest.map((event) => (
-                  <li key={event.id}>
-                    <EventCard event={event} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </>
-      )}
+      ) : rest.length > 0 ? (
+        <section aria-labelledby="more-events">
+          <h2 id="more-events" className="text-display mb-5 text-slate-900">
+            More events
+          </h2>
+          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {rest.map((event) => (
+              <li key={event.id}>
+                <EventCard event={event} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

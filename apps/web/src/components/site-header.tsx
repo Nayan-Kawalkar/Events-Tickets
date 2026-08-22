@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
-import { MobileDrawer, MobilePageTitle, PrimaryNav, UserMenu } from "./site-nav";
+import { MobilePageTitle, PrimaryNav, UserMenu } from "./site-nav";
 
 /**
  * Sticky header.
@@ -56,7 +56,17 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
               </Link>
             </div>
           )}
-          <MobileDrawer user={navUser} />
+
+          {/* Mobile has no menu button: the bottom bar is the navigation, and
+              account actions live on the Profile tab. */}
+          {user ? null : (
+            <Link
+              href="/login"
+              className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-[#04231c] md:hidden"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </div>
     </header>

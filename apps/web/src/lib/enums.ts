@@ -27,6 +27,7 @@ export type TicketStatus = (typeof TicketStatus)[keyof typeof TicketStatus];
 
 export const Role = {
   STUDENT: "STUDENT",
+  SCANNER: "SCANNER",
   ORGANIZER: "ORGANIZER",
   ADMIN: "ADMIN",
 } as const;

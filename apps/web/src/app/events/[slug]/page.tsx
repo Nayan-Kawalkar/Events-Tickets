@@ -2,6 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma, EventStatus, ManualPaymentStatus, PaymentMode } from "@ct/db";
+import {
+  AddToCalendar,
+  ContactCard,
+  HostsSection,
+  LocationCard,
+} from "@/components/event-details";
 import { Poster } from "@/components/poster";
 import { Alert, ButtonLink, Card, EventStatusBadge, PageHeader } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -28,6 +34,24 @@ async function loadEvent(slug: string) {
       status: true,
       capacity: true,
       posterUploadId: true,
+      hostOrganization: true,
+      addressLine: true,
+      latitude: true,
+      longitude: true,
+      contactEmail: true,
+      contactPhone: true,
+      hosts: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          title: true,
+          email: true,
+          instagram: true,
+          twitter: true,
+          linkedin: true,
+        },
+      },
       _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
       ticketTypes: {
         orderBy: { pricePaise: "asc" },
@@ -76,6 +100,7 @@ export default async function EventDetailPage({ params }: Props) {
   // rather than a button the server will refuse.
   const heldByType = new Map<string, number>();
   const pendingPayment = new Set<string>();
+  let myTicket: { publicId: string } | null = null;
   if (user) {
     const [held, claims] = await Promise.all([
       prisma.ticket.groupBy({
@@ -94,6 +119,16 @@ export default async function EventDetailPage({ params }: Props) {
     ]);
     for (const row of held) heldByType.set(row.ticketTypeId, row._count._all);
     for (const claim of claims) pendingPayment.add(claim.ticketTypeId);
+
+    myTicket = await prisma.ticket.findFirst({
+      where: {
+        ownerUserId: user.id,
+        eventId: event.id,
+        status: { in: LIVE_TICKET_STATUS_LIST },
+      },
+      orderBy: { issuedAt: "desc" },
+      select: { publicId: true },
+    });
   }
 
   /** Mirrors the server's rules so the UI explains itself. The server decides. */
@@ -137,14 +172,35 @@ export default async function EventDetailPage({ params }: Props) {
           <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <EventStatusBadge status={event.status} />
-              {event.venue ? (
-                <span className="text-xs text-slate-700">{event.venue}</span>
+              {event.hostOrganization ? (
+                <span className="text-xs font-medium text-brand-300">{event.hostOrganization}</span>
               ) : null}
+              {event.venue ? <span className="text-xs text-slate-700">{event.venue}</span> : null}
             </div>
             <h1 className="text-display-lg text-slate-900 drop-shadow-lg">{event.title}</h1>
           </div>
         </div>
       </section>
+
+      {/* Already registered: say so, and put the ticket one tap away. */}
+      {myTicket ? (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-brand-500/40 bg-brand-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-center gap-2 text-sm font-medium text-brand-200">
+            <span aria-hidden="true">✓</span>
+            You&apos;re going
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href={`/tickets/${myTicket.publicId}`}>My ticket</ButtonLink>
+            <AddToCalendar
+              title={event.title}
+              startsAt={event.startsAt}
+              endsAt={event.endsAt}
+              location={[event.venue, event.addressLine].filter(Boolean).join(", ")}
+              details={event.description ?? undefined}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 md:grid-cols-[1.6fr_1fr] lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
@@ -223,6 +279,8 @@ export default async function EventDetailPage({ params }: Props) {
               </ul>
             )}
           </section>
+
+          <HostsSection hosts={event.hosts} />
         </div>
 
         <aside className="space-y-4">
@@ -251,6 +309,19 @@ export default async function EventDetailPage({ params }: Props) {
               ) : null}
             </dl>
           </Card>
+
+          <LocationCard
+            location={{
+              venue: event.venue,
+              addressLine: event.addressLine,
+              latitude: event.latitude,
+              longitude: event.longitude,
+            }}
+          />
+
+          <ContactCard
+            contact={{ contactEmail: event.contactEmail, contactPhone: event.contactPhone }}
+          />
 
           {!registrationOpen ? (
             <Alert tone="info">Registration is not open for this event right now.</Alert>

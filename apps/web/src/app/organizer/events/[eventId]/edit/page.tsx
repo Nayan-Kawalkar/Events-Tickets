@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma, Role, TicketStatus } from "@ct/db";
 import { EventForm } from "@/components/event-form";
+import { HostsEditor, type HostRow } from "@/components/hosts-editor";
+import { ScannersEditor, type ScannerRow } from "@/components/scanners-editor";
 import { TicketTypesEditor, type TicketTypeRow } from "@/components/ticket-types-editor";
 import { ButtonLink, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
@@ -26,7 +28,7 @@ export default async function EditEventPage({ params }: Props) {
   const event = await findManageableEvent(user, idResult.data);
   if (!event) notFound();
 
-  const [ticketTypes, issuedTickets] = await Promise.all([
+  const [ticketTypes, issuedTickets, hosts, scanners] = await Promise.all([
     prisma.ticketType.findMany({
       where: { eventId: event.id },
       orderBy: { createdAt: "asc" },
@@ -49,6 +51,29 @@ export default async function EditEventPage({ params }: Props) {
       },
     }),
     prisma.ticket.count({ where: { eventId: event.id, status: { in: LIVE } } }),
+    prisma.eventHost.findMany({
+      where: { eventId: event.id },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        name: true,
+        title: true,
+        email: true,
+        instagram: true,
+        twitter: true,
+        linkedin: true,
+      },
+    }),
+    prisma.scannerAssignment.findMany({
+      where: { eventId: event.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        gateId: true,
+        user: { select: { fullName: true, email: true, role: true } },
+        assignedBy: { select: { fullName: true } },
+      },
+    }),
   ]);
 
   const rows: TicketTypeRow[] = ticketTypes.map((t) => ({
@@ -75,12 +100,12 @@ export default async function EditEventPage({ params }: Props) {
         title={event.title}
         description={`/events/${event.slug}`}
         action={
-          <div className="flex gap-2">
-            <ButtonLink href={`/organizer/events/${event.id}/payments`} variant="secondary">
-              Payments
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href={`/organizer/events/${event.id}`} variant="secondary">
+              Back to event
             </ButtonLink>
             <ButtonLink href={`/organizer/events/${event.id}/attendees`} variant="secondary">
-              View attendees
+              Guest list
             </ButtonLink>
           </div>
         }
@@ -102,10 +127,28 @@ export default async function EditEventPage({ params }: Props) {
             status: event.status,
             capacity: event.capacity === null ? "" : String(event.capacity),
             posterUploadId: event.posterUploadId ?? "",
+            hostOrganization: event.hostOrganization ?? "",
+            addressLine: event.addressLine ?? "",
+            latitude: event.latitude === null ? "" : String(event.latitude),
+            longitude: event.longitude === null ? "" : String(event.longitude),
+            contactEmail: event.contactEmail ?? "",
+            contactPhone: event.contactPhone ?? "",
           }}
         />
 
         <TicketTypesEditor eventId={event.id} ticketTypes={rows} eventCapacity={event.capacity} />
+
+        <HostsEditor eventId={event.id} hosts={hosts as HostRow[]} />
+
+        <ScannersEditor
+          eventId={event.id}
+          scanners={scanners.map((row): ScannerRow => ({
+            id: row.id,
+            gateId: row.gateId,
+            user: row.user,
+            assignedBy: row.assignedBy.fullName,
+          }))}
+        />
       </div>
     </>
   );

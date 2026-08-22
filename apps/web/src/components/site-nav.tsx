@@ -183,187 +183,39 @@ export function MobilePageTitle() {
   );
 }
 
-/** Mobile: hamburger opening a slide-over drawer from the right. */
-export function MobileDrawer({ user }: { user: NavUser }) {
-  const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => setOpen(false), [pathname]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    // Stop the page behind the drawer from scrolling.
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    panelRef.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
-
-  const primary = visibleTo(PRIMARY_NAV, user?.role ?? null);
-  const organizer = excluding(
-    visibleTo(ORGANIZER_NAV, user?.role ?? null),
-    primary,
-  );
-  const account = visibleTo(ACCOUNT_NAV, user?.role ?? null);
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-expanded={open}
-        aria-controls="mobile-drawer"
-        className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/12 text-slate-800 transition-colors hover:border-brand-500/60 hover:text-brand-300 md:hidden"
-      >
-        <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
-        <span className="sr-only">Open menu</span>
-      </button>
-
-      {open ? (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-
-          <div
-            id="mobile-drawer"
-            ref={panelRef}
-            tabIndex={-1}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu"
-            className="absolute inset-y-0 right-0 flex w-[86%] max-w-xs flex-col border-l border-white/10 bg-[#09201e] shadow-2xl"
-            style={{ animation: "slideIn 0.25s cubic-bezier(0.22,1,0.36,1) both" }}
-          >
-            <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
-              {user ? (
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-900">{user.fullName}</p>
-                  <p className="truncate text-xs text-slate-500">{user.email}</p>
-                </div>
-              ) : (
-                <p className="text-sm font-medium text-slate-900">Menu</p>
-              )}
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-700 hover:text-brand-300"
-              >
-                <X className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
-                <span className="sr-only">Close menu</span>
-              </button>
-            </div>
-
-            <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-2 py-3">
-              <DrawerGroup items={primary} pathname={pathname} />
-              {organizer.length > 0 ? (
-                <DrawerGroup label="Organizer" items={organizer} pathname={pathname} />
-              ) : null}
-              <DrawerGroup label="Account" items={account} pathname={pathname} />
-            </nav>
-
-            <div className="border-t border-white/8 p-3">
-              {user ? (
-                <form action="/api/auth/logout" method="post">
-                  <button
-                    type="submit"
-                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-400/30 bg-red-500/10 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
-                  >
-                    <LogOut className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                    Logout
-                  </button>
-                </form>
-              ) : (
-                <Link
-                  href="/login"
-                  className="flex min-h-11 w-full items-center justify-center rounded-lg bg-brand-500 text-sm font-semibold text-[#04231c]"
-                >
-                  Sign in
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function DrawerGroup({
-  label,
-  items,
-  pathname,
-}: {
-  label?: string;
-  items: { href: string; label: string; icon: IconName }[];
-  pathname: string;
-}) {
-  if (items.length === 0) return null;
-
-  return (
-    <div className="mb-2">
-      {label ? (
-        <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          {label}
-        </p>
-      ) : null}
-      {items.map((item) => {
-        const active = isActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={cx(
-              "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm transition-colors",
-              active
-                ? "bg-brand-500/12 font-semibold text-brand-300"
-                : "text-slate-700 hover:bg-white/5 hover:text-slate-900",
-            )}
-          >
-            <NavIcon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
-            {item.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
 /** Mobile: fixed bottom bar. Icons always carry a text label. */
 export function BottomNav({ user }: { user: NavUser }) {
   const pathname = usePathname();
 
-  // Annotated before filtering, so `icon` keeps its IconName type.
+  // Every destination lives here now that the drawer is gone. Annotated before
+  // filtering so `icon` keeps its IconName type.
   const ALL: {
     href: string;
     label: string;
     icon: IconName;
     authOnly?: boolean;
     organizerOnly?: boolean;
+    scannerOnly?: boolean;
+    guestOnly?: boolean;
   }[] = [
-    { href: "/", label: "Home", icon: "home" },
+    { href: "/", label: "Events", icon: "home" },
     { href: "/tickets", label: "Tickets", icon: "ticket", authOnly: true },
-    { href: "/organizer/events/new", label: "Create", icon: "plus", organizerOnly: true },
+    { href: "/organizer/events", label: "Manage", icon: "calendar", organizerOnly: true },
+    { href: "/scanner", label: "Scan", icon: "scan", scannerOnly: true },
     { href: "/profile", label: "Profile", icon: "user", authOnly: true },
-    { href: "/help", label: "More", icon: "menu" },
+    { href: "/help", label: "Help", icon: "help", guestOnly: true },
   ];
 
+  // Five is the most that stays tappable on a 360px screen.
   const items = ALL.filter((item) => {
     if (item.organizerOnly) return user?.role === "ORGANIZER" || user?.role === "ADMIN";
+    if (item.scannerOnly) {
+      return user?.role === "SCANNER" || user?.role === "ORGANIZER" || user?.role === "ADMIN";
+    }
     if (item.authOnly) return Boolean(user);
+    if (item.guestOnly) return !user;
     return true;
-  });
+  }).slice(0, 5);
 
   // Hide on the scanner: that screen needs the full viewport at a gate.
   if (pathname.startsWith("/scanner")) return null;

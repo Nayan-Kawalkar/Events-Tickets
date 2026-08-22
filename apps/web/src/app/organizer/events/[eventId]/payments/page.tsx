@@ -82,12 +82,13 @@ export default async function PaymentsPage({ params }: Props) {
         title={`Payments · ${event.title}`}
         description={`${queue.length} awaiting verification`}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href={`/scanner?event=${event.id}`}>Scan tickets</ButtonLink>
             <ButtonLink href={`/organizer/events/${event.id}/attendees`} variant="secondary">
-              Attendees
+              Guest list
             </ButtonLink>
-            <ButtonLink href={`/organizer/events/${event.id}/edit`} variant="secondary">
-              Edit event
+            <ButtonLink href={`/organizer/events/${event.id}`} variant="secondary">
+              Event
             </ButtonLink>
           </div>
         }

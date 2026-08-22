@@ -2,6 +2,7 @@ import "server-only";
 import { prisma, EventStatus, Role, TicketStatus } from "@ct/db";
 import type { SessionUser } from "./auth";
 import { verifyQrPayload } from "./qr";
+import { consumeSuperPass, isSuperPassPayload } from "./super-pass";
 
 export type RejectReason =
   | "INVALID"
@@ -13,7 +14,9 @@ export type RejectReason =
   | "CANCELLED"
   | "BLOCKED"
   | "EVENT_NOT_LIVE"
-  | "NOT_AUTHORIZED_FOR_EVENT";
+  | "NOT_AUTHORIZED_FOR_EVENT"
+  | "SUPER_PASS_USED"
+  | "SUPER_PASS_REVOKED";
 
 export type CheckinResult =
   | {
@@ -21,7 +24,8 @@ export type CheckinResult =
       message: string;
       attendee: { name: string; rollNumber: string | null; ticketType: string };
       checkedInAt: Date;
-      ticketId: string;
+      /** Absent for a master pass, which admits without consuming a ticket. */
+      ticketId?: string;
       eventId: string;
     }
   | {
@@ -43,6 +47,8 @@ const REJECT_MESSAGES: Record<RejectReason, string> = {
   BLOCKED: "This ticket is blocked. Send the attendee to the help desk.",
   EVENT_NOT_LIVE: "This event is not open for entry.",
   NOT_AUTHORIZED_FOR_EVENT: "You are not assigned to this event.",
+  SUPER_PASS_USED: "This master pass has already been used. Generate a new one.",
+  SUPER_PASS_REVOKED: "This master pass was replaced by a newer one.",
 };
 
 function reject(reason: RejectReason, extra?: { ticketId?: string; eventId?: string }): CheckinResult {
@@ -57,6 +63,24 @@ function reject(reason: RejectReason, extra?: { ticketId?: string; eventId?: str
  * cancelling an event still reaches the gate almost immediately.
  */
 type CachedEvent = { id: string; status: EventStatus; createdById: string; cachedAt: number };
+
+/**
+ * May this person work this gate?
+ *
+ * Admins anywhere; the organizer who created the event; and any volunteer with
+ * an assignment for it. The assignment is the grant — the SCANNER role alone
+ * admits nobody.
+ */
+async function mayScanEvent(scanner: SessionUser, event: CachedEvent) {
+  if (scanner.role === Role.ADMIN) return true;
+  if (event.createdById === scanner.id) return true;
+
+  const assignment = await prisma.scannerAssignment.findUnique({
+    where: { userId_eventId: { userId: scanner.id, eventId: event.id } },
+    select: { id: true },
+  });
+  return assignment !== null;
+}
 const EVENT_CACHE_MS = 15_000;
 const eventCache = new Map<string, CachedEvent>();
 
@@ -100,22 +124,60 @@ export async function validateAndConsume(params: {
 }): Promise<CheckinResult> {
   const { scanner, eventId, gateId, qrPayload } = params;
 
+  const event = await loadEvent(eventId);
+  if (!event) return reject("NOT_AUTHORIZED_FOR_EVENT");
+
+  // A scanner may only check people in at an event they are responsible for.
+  if (!(await mayScanEvent(scanner, event))) {
+    return reject("NOT_AUTHORIZED_FOR_EVENT", { eventId });
+  }
+
+  if (event.status !== EventStatus.PUBLISHED && event.status !== EventStatus.CLOSED) {
+    return reject("EVENT_NOT_LIVE", { eventId });
+  }
+
+  // A master pass is admitted here, after the same event and scanner checks a
+  // ticket goes through. It carries its own version prefix so it can never be
+  // mistaken for a ticket payload.
+  if (isSuperPassPayload(qrPayload)) {
+    const result = await consumeSuperPass({
+      payload: qrPayload,
+      scannerUserId: scanner.id,
+      eventId,
+      gateId,
+    });
+
+    if (!result.ok) {
+      const reason =
+        result.reason === "ALREADY_USED"
+          ? "SUPER_PASS_USED"
+          : result.reason === "REVOKED"
+            ? "SUPER_PASS_REVOKED"
+            : result.reason;
+      return reject(reason, { eventId });
+    }
+
+    return {
+      status: "APPROVED",
+      message: "Master pass accepted",
+      attendee: {
+        name: result.pass.label ?? "Master pass",
+        rollNumber: null,
+        ticketType: "Admin master pass",
+      },
+      checkedInAt: new Date(),
+      eventId,
+    };
+  }
+
+  // Ticket signature check, local: a forged code never reaches the database.
+  // It runs after the master-pass branch, because it only understands the v1
+  // ticket format and would reject a master pass as an unknown version.
   const verified = verifyQrPayload(qrPayload);
   if (!verified.ok) {
     if (verified.reason === "INVALID_SIGNATURE") return reject("INVALID_SIGNATURE", { eventId });
     if (verified.reason === "EXPIRED") return reject("EXPIRED", { eventId });
     return reject("INVALID", { eventId });
-  }
-
-  const event = await loadEvent(eventId);
-  if (!event) return reject("NOT_AUTHORIZED_FOR_EVENT");
-
-  // A scanner may only check people in at an event they are responsible for.
-  const mayScan = scanner.role === Role.ADMIN || event.createdById === scanner.id;
-  if (!mayScan) return reject("NOT_AUTHORIZED_FOR_EVENT", { eventId });
-
-  if (event.status !== EventStatus.PUBLISHED && event.status !== EventStatus.CLOSED) {
-    return reject("EVENT_NOT_LIVE", { eventId });
   }
 
   const now = new Date();
@@ -164,6 +226,98 @@ export async function validateAndConsume(params: {
 
   // Nothing was consumed. Only now pay for a read, to say precisely why.
   return diagnose(scanner, eventId, verified.publicId);
+}
+
+/**
+ * Check a ticket in without a QR: the fallback for a dead phone, a cracked
+ * screen or a code the camera cannot read.
+ *
+ * The signature check is skipped by definition, so the trust comes from the
+ * operator instead: only someone who can manage the event may do this, they
+ * pick the attendee from that event's own list, and every use is written to the
+ * audit log so manual admissions can be reviewed afterwards.
+ */
+export async function manualCheckin(params: {
+  scanner: SessionUser;
+  eventId: string;
+  ticketId: string;
+  gateId: string;
+}): Promise<CheckinResult> {
+  const { scanner, eventId, ticketId, gateId } = params;
+
+  const event = await loadEvent(eventId);
+  if (!event) return reject("NOT_AUTHORIZED_FOR_EVENT");
+
+  if (!(await mayScanEvent(scanner, event))) {
+    return reject("NOT_AUTHORIZED_FOR_EVENT", { eventId });
+  }
+
+  if (event.status !== EventStatus.PUBLISHED && event.status !== EventStatus.CLOSED) {
+    return reject("EVENT_NOT_LIVE", { eventId });
+  }
+
+  const now = new Date();
+
+  // Same conditional write as a scan: one-time use is enforced identically,
+  // so a manual admission cannot double-admit either.
+  const rows = await prisma.$queryRaw<ConsumeRow[]>`
+    WITH updated AS (
+      UPDATE tickets
+      SET status = 'CHECKED_IN'::"TicketStatus",
+          "checkedInAt" = ${now},
+          "checkedInByUserId" = ${scanner.id}::uuid,
+          "checkedInGateId" = ${gateId}
+      WHERE id = ${ticketId}::uuid
+        AND "eventId" = ${eventId}::uuid
+        AND status = 'ISSUED'::"TicketStatus"
+      RETURNING id, "ticketTypeId", "ownerUserId", "attendeeName", "attendeeRollNumber"
+    )
+    SELECT u.id,
+           u."attendeeName",
+           u."attendeeRollNumber",
+           tt.name        AS "ticketTypeName",
+           o."fullName"   AS "ownerFullName",
+           o."rollNumber" AS "ownerRollNumber"
+    FROM updated u
+    JOIN ticket_types tt ON tt.id = u."ticketTypeId"
+    JOIN users o        ON o.id  = u."ownerUserId"
+  `;
+
+  const approved = rows[0];
+  if (approved) {
+    return {
+      status: "APPROVED",
+      message: "Entry allowed (manual check-in)",
+      attendee: {
+        name: approved.attendeeName ?? approved.ownerFullName,
+        rollNumber: approved.attendeeRollNumber ?? approved.ownerRollNumber,
+        ticketType: approved.ticketTypeName,
+      },
+      checkedInAt: now,
+      ticketId: approved.id,
+      eventId,
+    };
+  }
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: { id: true, eventId: true, status: true },
+  });
+  if (!ticket) return reject("NOT_FOUND", { eventId });
+  if (ticket.eventId !== eventId) return reject("WRONG_EVENT", { ticketId: ticket.id, eventId });
+
+  switch (ticket.status) {
+    case TicketStatus.CHECKED_IN:
+      return reject("ALREADY_USED", { ticketId: ticket.id, eventId });
+    case TicketStatus.CANCELLED:
+      return reject("CANCELLED", { ticketId: ticket.id, eventId });
+    case TicketStatus.BLOCKED:
+      return reject("BLOCKED", { ticketId: ticket.id, eventId });
+    case TicketStatus.EXPIRED:
+      return reject("EXPIRED", { ticketId: ticket.id, eventId });
+    default:
+      return reject("INVALID", { ticketId: ticket.id, eventId });
+  }
 }
 
 /** Explain a failed consume. Runs only on the rejection path. */

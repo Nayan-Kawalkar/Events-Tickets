@@ -78,7 +78,42 @@ const eventFields = {
   status: z.nativeEnum(EventStatus),
   capacity: optionalCapacity,
   posterUploadId: z.string().uuid().optional().or(z.literal("")).or(z.null()),
+  hostOrganization: z.string().trim().max(120).optional().or(z.literal("")),
+  addressLine: z.string().trim().max(400).optional().or(z.literal("")),
+  latitude: z
+    .union([z.coerce.number().min(-90).max(90), z.literal("").transform(() => null), z.null()])
+    .optional()
+    .transform((v) => v ?? null),
+  longitude: z
+    .union([z.coerce.number().min(-180).max(180), z.literal("").transform(() => null), z.null()])
+    .optional()
+    .transform((v) => v ?? null),
+  contactEmail: z
+    .union([emailSchema, z.literal("").transform(() => null), z.null()])
+    .optional()
+    .transform((v) => v ?? null),
+  contactPhone: z
+    .string()
+    .trim()
+    .regex(/^$|^[+]?[0-9 ()-]{7,20}$/, "Enter a valid phone number")
+    .optional()
+    .or(z.literal("")),
 };
+
+/** A person credited as running the event. */
+export const eventHostSchema = z
+  .object({
+    name: z.string().trim().min(2, "Enter the host's name").max(120),
+    title: z.string().trim().max(120).optional().or(z.literal("")),
+    email: z
+      .union([emailSchema, z.literal("").transform(() => null), z.null()])
+      .optional()
+      .transform((v) => v ?? null),
+    instagram: z.string().trim().max(200).optional().or(z.literal("")),
+    twitter: z.string().trim().max(200).optional().or(z.literal("")),
+    linkedin: z.string().trim().max(200).optional().or(z.literal("")),
+  })
+  .strict();
 
 /** Cross-field date rules shared by create and update. */
 function refineEventDates<T extends z.ZodTypeAny>(schema: T) {

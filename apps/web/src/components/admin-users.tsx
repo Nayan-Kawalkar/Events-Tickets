@@ -20,6 +20,7 @@ export type AdminUserRow = {
 
 const roleStyles: Record<Role, string> = {
   ADMIN: "bg-brand-500/12 text-brand-300 ring-brand-500/40",
+  SCANNER: "bg-amber-400/12 text-amber-300 ring-amber-400/40",
   ORGANIZER: "bg-sky-400/12 text-sky-300 ring-sky-400/40",
   STUDENT: "bg-slate-200/50 text-slate-700 ring-white/10",
 };
@@ -90,6 +91,7 @@ export function CreateUserForm() {
           <Field label="Role" htmlFor="new-role" error={fields.role} required>
             <Select id="new-role" name="role" defaultValue={Role.ORGANIZER} error={fields.role}>
               <option value={Role.ORGANIZER}>Organizer</option>
+              <option value={Role.SCANNER}>Scanner (gate volunteer)</option>
               <option value={Role.ADMIN}>Admin</option>
               <option value={Role.STUDENT}>Student</option>
             </Select>
@@ -178,6 +180,7 @@ export function UserRow({ user }: { user: AdminUserRow }) {
             className="min-h-11 rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 [&>option]:bg-[#0b2a27]"
           >
             <option value={Role.STUDENT}>Student</option>
+            <option value={Role.SCANNER}>Scanner</option>
             <option value={Role.ORGANIZER}>Organizer</option>
             <option value={Role.ADMIN}>Admin</option>
           </select>

@@ -1,0 +1,1 @@
+postgresql://postgres.tpqclifjxxzfffekhyjp:nayan123nayan@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=5&pool_timeout=20

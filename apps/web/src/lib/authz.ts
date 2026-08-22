@@ -16,6 +16,31 @@ export function canAccessOrganizerArea(user: SessionUser) {
 }
 
 /**
+ * Who may open the gate scanner at all.
+ *
+ * A SCANNER passes this check but still needs an assignment for the specific
+ * event — the role opens the door, the assignment says which gate.
+ */
+export function canUseScanner(user: SessionUser) {
+  return user.role === Role.SCANNER || user.role === Role.ORGANIZER || user.role === Role.ADMIN;
+}
+
+/** Events a given user may scan, as a Prisma `where` fragment. */
+export function scannableEventsWhere(user: SessionUser) {
+  if (user.role === Role.ADMIN) return {};
+  if (user.role === Role.ORGANIZER) {
+    return {
+      OR: [
+        { createdById: user.id },
+        { scannerAssignments: { some: { userId: user.id } } },
+      ],
+    };
+  }
+  // A volunteer sees only what they have been assigned.
+  return { scannerAssignments: { some: { userId: user.id } } };
+}
+
+/**
  * Organizers may only act on events they created. Admins may act on any event.
  * (Organization-scoped ownership replaces this in a later phase.)
  */

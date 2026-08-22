@@ -31,7 +31,12 @@ export type AuditAction =
   | "ADMIN_TICKET_BLOCKED"
   | "ADMIN_TICKET_CANCELLED"
   | "ADMIN_TICKET_REINSTATED"
-  | "ADMIN_TICKET_REISSUED";
+  | "ADMIN_TICKET_REISSUED"
+  | "MANUAL_CHECKIN"
+  | "SUPER_PASS_ISSUED"
+  | "SUPER_PASS_REVOKED"
+  | "SCANNER_ASSIGNED"
+  | "SCANNER_REVOKED";
 
 /**
  * Append an immutable audit record. Never throws — a logging failure must not
