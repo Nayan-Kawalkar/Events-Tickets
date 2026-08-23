@@ -1,6 +1,7 @@
 // Lucide dropped brand logos in v1, so social links use generic marks with an
 // explicit accessible label naming the network.
 import { AtSign, CalendarDays, Globe, Link2, Mail, MapPin, Phone } from "lucide-react";
+import { HostAvatar } from "./host-avatar";
 import { Card } from "./ui";
 
 export type EventLocation = {
@@ -22,7 +23,8 @@ export type HostEntry = {
   email: string | null;
   instagram: string | null;
   twitter: string | null;
-  linkedin: string | null;
+  linkedin: string | null;
+  avatarUploadId: string | null;
 };
 
 /**
@@ -127,16 +129,7 @@ export function HostsSection({ hosts }: { hosts: HostEntry[] }) {
         {hosts.map((host) => (
           <li key={host.id} className="row-hover flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
-              <span
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-sm font-semibold text-brand-300"
-              >
-                {host.name
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((part) => part[0]?.toUpperCase() ?? "")
-                  .join("")}
-              </span>
+              <HostAvatar name={host.name} uploadId={host.avatarUploadId} className="h-10 w-10" />
               <div className="min-w-0">
                 <p className="truncate font-medium text-slate-900">{host.name}</p>
                 {host.title ? <p className="truncate text-xs text-slate-500">{host.title}</p> : null}

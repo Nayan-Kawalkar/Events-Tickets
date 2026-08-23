@@ -9,6 +9,10 @@ const schema = z.object({
   // How long a ticket's QR stays valid after the event ends (default 6 hours).
   QR_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 6),
   ALLOWED_EMAIL_DOMAINS: z.string().default(""),
+  // Both required together to switch Google sign-in on; absent means the
+  // feature is simply off, never a boot failure.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 

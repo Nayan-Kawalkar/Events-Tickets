@@ -2,6 +2,13 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { Prisma, prisma, EventStatus, TicketStatus } from "@ct/db";
 import { LIVE_TICKET_STATUS_LIST } from "./ticket-status";
+import {
+  type CustomFieldSpec,
+  type FieldErrors,
+  labelAnswers,
+  validateBuiltIns,
+  validateCustomAnswers,
+} from "./attendee-fields";
 
 /** Random, unguessable public ticket id. Never sequential. */
 export function generateTicketPublicId() {
@@ -20,7 +27,8 @@ export type RejectionReason =
   | "STUDENT_ID_REQUIRED"
   | "MAX_PER_USER_REACHED"
   | "TICKET_TYPE_SOLD_OUT"
-  | "EVENT_FULL";
+  | "EVENT_FULL"
+  | "FIELDS_INVALID";
 
 export const REJECTION_MESSAGES: Record<RejectionReason, string> = {
   EVENT_NOT_FOUND: "This event is no longer available.",
@@ -35,11 +43,12 @@ export const REJECTION_MESSAGES: Record<RejectionReason, string> = {
   MAX_PER_USER_REACHED: "You already hold the maximum number of tickets for this ticket type.",
   TICKET_TYPE_SOLD_OUT: "This ticket type is sold out.",
   EVENT_FULL: "This event has reached its capacity.",
+  FIELDS_INVALID: "Please check the highlighted fields.",
 };
 
 export type RegistrationResult =
   | { ok: true; ticket: { id: string; publicId: string } }
-  | { ok: false; reason: RejectionReason };
+  | { ok: false; reason: RejectionReason; fields?: FieldErrors };
 
 type Actor = { id: string; rollNumber: string | null };
 
@@ -50,6 +59,7 @@ export type AttendeeSnapshot = {
   attendeePhone?: string | null;
   attendeeRollNumber?: string | null;
   attendeeDepartment?: string | null;
+  customAnswers?: Record<string, string>;
 };
 
 /**
@@ -80,7 +90,10 @@ async function attemptRegistration(
         return { ok: false, reason: "REGISTRATION_CLOSED" };
       }
 
-      const ticketType = await tx.ticketType.findUnique({ where: { id: ticketTypeId } });
+      const ticketType = await tx.ticketType.findUnique({
+        where: { id: ticketTypeId },
+        include: { customFields: { orderBy: { sortOrder: "asc" } } },
+      });
       // Guard the ticket type belongs to this event — the ids arrive from the client.
       if (!ticketType || ticketType.eventId !== event.id) {
         return { ok: false, reason: "TICKET_TYPE_NOT_FOUND" };
@@ -96,9 +109,30 @@ async function attemptRegistration(
       // Until that phase lands, refuse rather than issue something for free.
       if (ticketType.pricePaise > 0) return { ok: false, reason: "PAID_NOT_SUPPORTED" };
 
-      // The roll number on the form is what counts: a guest pass may be bought
-      // by a student for someone else, and a student pass must name a student.
-      if (ticketType.requiresStudentId && !attendee.attendeeRollNumber && !user.rollNumber) {
+      // The form is whatever this ticket type asks for. Validated here, on the
+      // server, against the same description the browser rendered from — a
+      // required field the client skipped is caught, and a hidden field the
+      // client invented is dropped rather than stored.
+      const spec = {
+        phoneMode: ticketType.phoneMode,
+        rollNumberMode: ticketType.rollNumberMode,
+        departmentMode: ticketType.departmentMode,
+        customFields: ticketType.customFields as CustomFieldSpec[],
+      };
+
+      const builtIns = validateBuiltIns(spec, {
+        attendeePhone: attendee.attendeePhone ?? "",
+        attendeeRollNumber: attendee.attendeeRollNumber ?? "",
+        attendeeDepartment: attendee.attendeeDepartment ?? "",
+      });
+      if (!builtIns.ok) return { ok: false, reason: "FIELDS_INVALID", fields: builtIns.errors };
+
+      const custom = validateCustomAnswers(spec.customFields, attendee.customAnswers ?? {});
+      if (!custom.ok) return { ok: false, reason: "FIELDS_INVALID", fields: custom.errors };
+
+      // A student ticket must still name a student, whichever way the roll
+      // number was configured.
+      if (ticketType.requiresStudentId && !builtIns.values.attendeeRollNumber && !user.rollNumber) {
         return { ok: false, reason: "STUDENT_ID_REQUIRED" };
       }
 
@@ -137,9 +171,12 @@ async function attemptRegistration(
           qrVersion: 1,
           attendeeName: attendee.attendeeName,
           attendeeEmail: attendee.attendeeEmail,
-          attendeePhone: attendee.attendeePhone || null,
-          attendeeRollNumber: attendee.attendeeRollNumber || user.rollNumber || null,
-          attendeeDepartment: attendee.attendeeDepartment || null,
+          attendeePhone: builtIns.values.attendeePhone,
+          attendeeRollNumber: builtIns.values.attendeeRollNumber || user.rollNumber || null,
+          attendeeDepartment: builtIns.values.attendeeDepartment,
+          // Stored with the label as it read at purchase, so an edited or
+          // deleted question never rewrites an answer already given.
+          customAnswers: labelAnswers(spec.customFields, custom.answers),
           termsAcceptedAt: new Date(),
         },
         select: { id: true, publicId: true },

@@ -215,6 +215,14 @@
       "namedRegex": "^/api/organizer/ticket\\-types/(?<nxtPticketTypeId>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/organizer/ticket-types/[ticketTypeId]/fields",
+      "regex": "^/api/organizer/ticket\\-types/([^/]+?)/fields(?:/)?$",
+      "routeKeys": {
+        "nxtPticketTypeId": "nxtPticketTypeId"
+      },
+      "namedRegex": "^/api/organizer/ticket\\-types/(?<nxtPticketTypeId>[^/]+?)/fields(?:/)?$"
+    },
+    {
       "page": "/api/organizer/vip-passes/[passId]",
       "regex": "^/api/organizer/vip\\-passes/([^/]+?)(?:/)?$",
       "routeKeys": {

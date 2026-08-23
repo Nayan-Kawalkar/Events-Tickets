@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { revalidateEventById } from "@/lib/event-cache";
 import { prisma } from "@ct/db";
 import { getCurrentUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -45,6 +46,7 @@ export async function POST(request: Request, { params }: Params) {
         attendeePhone: attendee.attendeePhone || null,
         attendeeRollNumber: attendee.attendeeRollNumber || null,
         attendeeDepartment: attendee.attendeeDepartment || null,
+        customAnswers: attendee.customAnswers ?? {},
       },
     );
 
@@ -59,9 +61,18 @@ export async function POST(request: Request, { params }: Params) {
         metadata: { ticketTypeId, reason: result.reason },
       });
 
+      // A form problem is the caller's to fix, so it comes back as a 400 with
+      // the offending fields named rather than a bare conflict.
+      if (result.reason === "FIELDS_INVALID") {
+        return fail(400, result.reason, REJECTION_MESSAGES[result.reason], result.fields);
+      }
+
       const status = result.reason === "EVENT_NOT_FOUND" || result.reason === "TICKET_TYPE_NOT_FOUND" ? 404 : 409;
       return fail(status, result.reason, REJECTION_MESSAGES[result.reason]);
     }
+
+    // One seat fewer: the catalogue and detail page both show that count.
+    await revalidateEventById(eventId);
 
     await audit({
       actorUserId: user.id,

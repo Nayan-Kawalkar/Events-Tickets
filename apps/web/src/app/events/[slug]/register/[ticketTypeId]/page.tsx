@@ -29,6 +29,21 @@ export default async function RegisterPage({ params }: Props) {
         description: true,
         pricePaise: true,
         requiresStudentId: true,
+        phoneMode: true,
+        rollNumberMode: true,
+        departmentMode: true,
+        customFields: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            label: true,
+            helpText: true,
+            placeholder: true,
+            type: true,
+            required: true,
+            options: true,
+          },
+        },
         paymentMode: true,
         event: {
           select: { id: true, slug: true, title: true, status: true, venue: true, startsAt: true },
@@ -75,7 +90,12 @@ export default async function RegisterPage({ params }: Props) {
         <AttendeeForm
           eventId={ticketType.event.id}
           ticketTypeId={ticketType.id}
-          requiresStudentId={ticketType.requiresStudentId}
+          form={{
+            phoneMode: ticketType.phoneMode,
+            rollNumberMode: ticketType.rollNumberMode,
+            departmentMode: ticketType.departmentMode,
+            customFields: ticketType.customFields,
+          }}
           submitLabel="Confirm registration"
           defaults={{
             attendeeName: user.fullName,

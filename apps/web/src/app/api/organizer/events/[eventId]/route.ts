@@ -1,4 +1,5 @@
 import { prisma } from "@ct/db";
+import { revalidateEvents } from "@/lib/event-cache";
 import { audit } from "@/lib/audit";
 import { ok, fail, parseJson, sameOrigin, serverError } from "@/lib/api";
 import { countLiveTickets, requireManageableEvent, requireOrganizerApi } from "@/lib/organizer-guard";
@@ -111,6 +112,10 @@ export async function PATCH(request: Request, { params }: Params) {
         ...(input.status !== undefined ? { from: event.status, to: input.status } : {}),
       },
     });
+
+    // A rename moves the detail page, so clear the old slug as well as the new.
+    revalidateEvents(updated.slug);
+    if (event.slug !== updated.slug) revalidateEvents(event.slug);
 
     return ok({ event: updated });
   } catch (err) {

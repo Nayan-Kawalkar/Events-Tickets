@@ -16,3 +16,6 @@ Thumbs.db
 .idea/
 .vscode/
 next-env.d.ts
+
+# local build dir used for verification runs
+.next-verify/

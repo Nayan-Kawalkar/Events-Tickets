@@ -27,21 +27,63 @@ export function isPastEvent(event: { status: EventStatus; endsAt: Date }) {
 /**
  * Move finished events to COMPLETED.
  *
- * One `UPDATE ... WHERE` that usually matches nothing, so it is cheap to call
- * from a page render. Never throws: a failed sync must not break a page, since
- * the derived status already shows the right thing.
+ * One `UPDATE ... WHERE` that usually matches nothing — cheap in database work,
+ * but still a network round-trip, and it sits on the render path of every
+ * listing page. Throttled to once per interval per process so it costs nothing
+ * on the requests in between.
+ *
+ * Delaying the write-back is safe because it is only ever a write-back:
+ * `effectiveStatus` already derives the right answer at read time, so nothing a
+ * user sees waits on this.
+ *
+ * Never throws: a failed sync must not break a page.
  */
-export async function syncCompletedEvents() {
-  try {
-    const result = await prisma.event.updateMany({
-      where: { status: { in: [...AGEABLE] }, endsAt: { lt: new Date() } },
-      data: { status: EventStatus.COMPLETED },
-    });
-    return result.count;
-  } catch (err) {
-    console.error("[events] failed to sync completed events", err);
-    return 0;
-  }
+const SYNC_INTERVAL_MS = 60_000;
+let lastSyncAt = 0;
+let inFlight: Promise<number> | null = null;
+
+export async function syncCompletedEvents(force = false) {
+  const due = force || Date.now() - lastSyncAt >= SYNC_INTERVAL_MS;
+  if (!due) return 0;
+
+  // Concurrent renders share one round-trip rather than each issuing their own.
+  if (inFlight) return inFlight;
+
+  inFlight = (async () => {
+    try {
+      const result = await prisma.event.updateMany({
+        where: { status: { in: [...AGEABLE] }, endsAt: { lt: new Date() } },
+        data: { status: EventStatus.COMPLETED },
+      });
+      // Stamped only on success, so a failed attempt is retried immediately
+      // rather than being suppressed for a full interval.
+      lastSyncAt = Date.now();
+      return result.count;
+    } catch (err) {
+      console.error("[events] failed to sync completed events", err);
+      return 0;
+    } finally {
+      inFlight = null;
+    }
+  })();
+
+  return inFlight;
+}
+
+/**
+ * Events a gate may still work, as a Prisma `where` fragment.
+ *
+ * Wider than "published": an event that has just aged into COMPLETED still
+ * admits people for as long as its QR codes stay valid, so it must remain
+ * selectable in the scanner. Without this the event would vanish from the gate
+ * at exactly the moment a queue is still moving.
+ */
+export function gateWindowWhere() {
+  const graceMs = Number(process.env.QR_TTL_SECONDS ?? 21600) * 1000;
+  return {
+    status: { in: [EventStatus.PUBLISHED, EventStatus.CLOSED, EventStatus.COMPLETED] },
+    endsAt: { gte: new Date(Date.now() - graceMs) },
+  };
 }
 
 /** Statuses a visitor may see listed publicly. */

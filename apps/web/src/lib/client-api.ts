@@ -6,7 +6,7 @@ export type ApiResult<T> = { ok: true; data: T } | ({ ok: false } & ApiFailure);
 /** Small JSON fetch wrapper that normalises our API error envelope. */
 export async function apiRequest<T = unknown>(
   url: string,
-  method: "POST" | "PATCH" | "DELETE",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown,
 ): Promise<ApiResult<T>> {
   let res: Response;

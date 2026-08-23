@@ -177,6 +177,49 @@ Start the dev server on http://localhost:3000:
 npm run dev
 ```
 
+### Google sign-in (optional)
+
+Off by default. With `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` unset the
+button does not render and the routes refuse — the app still boots and
+email/password sign-in is unaffected.
+
+To turn it on:
+
+1. Google Cloud console → **APIs & Services → Credentials → Create
+   credentials → OAuth client ID**, application type **Web application**.
+2. Under **Authorised redirect URIs** add this exact URL:
+
+   ```
+   ${APP_URL}/api/auth/google/callback
+   ```
+
+   For local development that is `http://localhost:3000/api/auth/google/callback`.
+   It must match `APP_URL` exactly, including scheme and port — Google rejects
+   anything else.
+3. Put the client ID and secret in `.env`:
+
+   ```
+   GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=...
+   ```
+
+4. Restart the dev server.
+
+How accounts are matched, in order:
+
+- an existing account with the same Google subject id → signed in;
+- an existing account with the same email → the Google id is **linked** to it,
+  so a person who signed up with a password keeps one account;
+- otherwise a new `STUDENT` account is created with no password.
+
+Roles are never granted by signing in — an admin still promotes people.
+Google accounts whose email is not verified are refused, which is what stops
+someone claiming an address they do not own. If `ALLOWED_EMAIL_DOMAINS` is set,
+it applies to Google sign-in exactly as it does to registration.
+
+Accounts created this way have no password, so password sign-in for them fails
+like any other bad credential. An admin can set a password for such an account
+from the admin users page if a fallback is ever needed.
 ### Demo accounts
 
 Seeded with the password in `SEED_PASSWORD` (default `Password123!`):

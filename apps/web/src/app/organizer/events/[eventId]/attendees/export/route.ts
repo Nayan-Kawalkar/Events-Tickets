@@ -4,6 +4,7 @@ import { canAccessOrganizerArea, findManageableEvent } from "@/lib/authz";
 import { audit } from "@/lib/audit";
 import { fail, forbidden, notFound, unauthorized } from "@/lib/api";
 import { toCsv } from "@/lib/format";
+import { storedAnswers } from "@/lib/attendee-fields";
 import { uuidSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -36,10 +37,22 @@ export async function GET(_request: Request, { params }: Params) {
       attendeeRollNumber: true,
       attendeeDepartment: true,
       termsAcceptedAt: true,
+      customAnswers: true,
       owner: { select: { fullName: true, email: true, rollNumber: true, department: true } },
       ticketType: { select: { name: true, pricePaise: true } },
     },
   });
+
+  // One column per question, built from the answers actually present. Labels
+  // are read from the tickets rather than the current questions, so answers to
+  // a question since deleted still export instead of vanishing.
+  const answersByTicket = tickets.map((t) => storedAnswers(t.customAnswers));
+  const questionLabels: string[] = [];
+  for (const answers of answersByTicket) {
+    for (const a of answers) {
+      if (!questionLabels.includes(a.label)) questionLabels.push(a.label);
+    }
+  }
 
   const csv = toCsv([
     [
@@ -56,8 +69,9 @@ export async function GET(_request: Request, { params }: Params) {
       "status",
       "issued_at",
       "checked_in_at",
+      ...questionLabels,
     ],
-    ...tickets.map((t) => [
+    ...tickets.map((t, i) => [
       t.publicId,
       t.attendeeName ?? t.owner.fullName,
       t.attendeeEmail ?? t.owner.email,
@@ -71,6 +85,9 @@ export async function GET(_request: Request, { params }: Params) {
       t.status,
       t.issuedAt.toISOString(),
       t.checkedInAt?.toISOString() ?? "",
+      ...questionLabels.map(
+        (label) => answersByTicket[i]?.find((a) => a.label === label)?.value ?? "",
+      ),
     ]),
   ]);
 

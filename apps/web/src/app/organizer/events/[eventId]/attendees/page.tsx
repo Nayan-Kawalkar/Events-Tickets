@@ -1,20 +1,33 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma, Role, TicketStatus } from "@ct/db";
+import { FilterChips, ResultCount, SearchBox } from "@/components/list-controls";
 import { ManualCheckinButton } from "@/components/manual-checkin";
 import { ButtonLink, Card, EmptyState, PageHeader, TicketStatusBadge } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { findManageableEvent } from "@/lib/authz";
 import { formatDateTime } from "@/lib/format";
+import { storedAnswers } from "@/lib/attendee-fields";
 import { uuidSchema } from "@/lib/validation";
 
 export const metadata: Metadata = { title: "Attendees" };
 export const dynamic = "force-dynamic";
 
+/**
+ * Gate-first ordering: on the door the useful question is "who has not come
+ * in yet", so that sits next to All rather than at the end.
+ */
+const STATUS_FILTERS = [
+  { label: "All", value: "" },
+  { label: "Not arrived", value: TicketStatus.ISSUED },
+  { label: "Checked in", value: TicketStatus.CHECKED_IN },
+  { label: "Cancelled", value: TicketStatus.CANCELLED },
+  { label: "On hold", value: TicketStatus.BLOCKED },
+] as const;
+
 type Props = {
   params: Promise<{ eventId: string }>;
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; status?: string }>;
 };
 
 export default async function AttendeesPage({ params, searchParams }: Props) {
@@ -31,10 +44,16 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
   if (!event) notFound();
 
   const q = sp.q?.trim() ?? "";
+  const status = STATUS_FILTERS.some((f) => f.value && f.value === sp.status)
+    ? (sp.status as TicketStatus)
+    : "";
 
-  const tickets = await prisma.ticket.findMany({
+  // Unfiltered total, so the count line can say what the filter is hiding.
+  const [tickets, totalTickets] = await Promise.all([
+    prisma.ticket.findMany({
     where: {
       eventId: event.id,
+      ...(status ? { status } : {}),
       ...(q
         ? {
             OR: [
@@ -60,17 +79,20 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
       attendeeName: true,
       attendeeEmail: true,
       attendeePhone: true,
+      customAnswers: true,
       attendeeRollNumber: true,
       owner: { select: { fullName: true, email: true, rollNumber: true } },
       ticketType: { select: { name: true } },
     },
-  });
+    }),
+    prisma.ticket.count({ where: { eventId: event.id } }),
+  ]);
 
   return (
     <>
       <PageHeader
         title={`Attendees · ${event.title}`}
-        description={`${tickets.length} ticket(s)${q ? " matching your search" : ""}`}
+        description={event.venue ?? undefined}
         action={
           <div className="flex flex-wrap gap-2">
             <ButtonLink href={`/scanner?event=${event.id}`}>Scan tickets</ButtonLink>
@@ -95,43 +117,43 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
         manual admission is recorded.
       </p>
 
-      <form method="get" className="mb-5 flex flex-wrap gap-2" role="search">
-        <label htmlFor="q" className="sr-only">
-          Search attendees
-        </label>
-        <input
-          id="q"
-          name="q"
-          defaultValue={q}
+      <div className="mb-5 space-y-3">
+        {/* Search and filter each carry the other through, so narrowing by
+            status does not throw away a name someone already typed. */}
+        <SearchBox
+          action={`/organizer/events/${event.id}/attendees`}
+          value={q}
           placeholder="Search name, email, roll number or ticket ID"
-          className="min-h-11 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-sm text-slate-900 placeholder:text-slate-500 transition-colors hover:border-white/20 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25 sm:max-w-md"
+          hidden={{ status }}
         />
-        <button
-          type="submit"
-          className="min-h-11 shrink-0 rounded-lg border border-white/12 bg-white/[0.03] px-4 text-sm font-medium text-slate-800 transition-all duration-200 hover:border-brand-500/60 hover:bg-brand-500/10 hover:text-brand-300"
-        >
-          Search
-        </button>
-        {q ? (
-          <Link
-            href={`/organizer/events/${event.id}/attendees`}
-            className="inline-flex min-h-11 items-center px-2 text-sm text-slate-600 hover:text-brand-400"
-          >
-            Clear
-          </Link>
-        ) : null}
-      </form>
+
+        <FilterChips
+          label="Filter by status"
+          basePath={`/organizer/events/${event.id}/attendees`}
+          param="status"
+          current={status}
+          options={STATUS_FILTERS}
+          params={{ q }}
+        />
+
+        <ResultCount shown={tickets.length} total={totalTickets} noun="ticket" />
+      </div>
 
       {tickets.length === 0 ? (
         <EmptyState
-          title={q ? "No attendees match that search" : "No tickets issued yet"}
-          description={q ? undefined : "Tickets appear here once students register."}
+          title={q || status ? "No attendees match that view" : "No tickets issued yet"}
+          description={q || status ? undefined : "Tickets appear here once students register."}
         />
       ) : (
-        <Card className="hidden overflow-x-auto p-0 md:block" glow={false}>
+        <Card className="hidden max-h-[70vh] overflow-auto p-0 md:block" glow={false}>
+          {/* The card scrolls, not the page: `overflow-x-auto` already made this
+              a scroll container, so a sticky header offset for the site bar
+              (`top-16`) landed 64px *inside* the card and covered the first row.
+              Giving the card a height and sticking the header at `top-0` makes
+              it hold its place over a long list, which is what it was for. */}
           <table className="w-full min-w-[46rem] text-left text-sm">
             <caption className="sr-only">Attendees for {event.title}</caption>
-            <thead className="sticky top-16 z-10 border-b border-white/10 bg-[#0b2a27] text-xs uppercase tracking-wider text-slate-600">
+            <thead className="sticky top-0 z-10 border-b border-white/10 bg-[#0b2a27] text-xs uppercase tracking-wider text-slate-600">
               <tr>
                 <th scope="col" className="px-4 py-3">Name</th>
                 <th scope="col" className="px-4 py-3">Email</th>
@@ -148,7 +170,18 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
             <tbody className="divide-y divide-white/6">
               {tickets.map((ticket) => (
                 <tr key={ticket.id} className="row-hover">
-                  <td className="px-4 py-3 font-medium text-slate-900">{ticket.attendeeName ?? ticket.owner.fullName}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    {ticket.attendeeName ?? ticket.owner.fullName}
+                    {storedAnswers(ticket.customAnswers).length > 0 ? (
+                      <ul className="mt-1 space-y-0.5">
+                        {storedAnswers(ticket.customAnswers).map((a) => (
+                          <li key={a.label} className="text-xs font-normal text-slate-500">
+                            <span className="text-slate-600">{a.label}:</span> {a.value}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{ticket.attendeeEmail ?? ticket.owner.email}</td>
                   <td className="px-4 py-3 text-slate-600">{ticket.attendeeRollNumber ?? ticket.owner.rollNumber ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-600">{ticket.attendeePhone ?? "—"}</td>

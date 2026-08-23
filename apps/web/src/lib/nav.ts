@@ -112,3 +112,24 @@ export function titleForPath(pathname: string): string {
   }
   return "College Events";
 }
+
+/**
+ * Where to send someone once they have signed in.
+ *
+ * The page they were trying to reach when they got bounced to the sign-in
+ * screen, or the home page when they simply chose to sign in. Never a
+ * dashboard by default: most people here are students who want an event, not
+ * an admin panel.
+ *
+ * Only same-site paths are honoured. An absolute URL, or the protocol-relative
+ * `//evil.test` form, would turn sign-in into an open redirect.
+ */
+export function safeNext(value: string | null | undefined, fallback = "/") {
+  if (!value) return fallback;
+  if (!value.startsWith("/") || value.startsWith("//")) return fallback;
+  // Pointing back at an auth page would loop: an authenticated visitor
+  // landing on /login is sent straight back to /login.
+  const path = value.split("?")[0];
+  if (path === "/login" || path === "/register" || path === "/logout") return fallback;
+  return value;
+}

@@ -51,6 +51,8 @@ enum UploadKind {
   EVENT_POSTER
   /// Organizer's UPI QR, shown to students on the payment page.
   UPI_QR
+  /// Host headshot. Public: shown on the event page to anyone.
+  HOST_AVATAR
   /// Student's payment screenshot, visible only to them and the event organizer.
   PAYMENT_PROOF
 }
@@ -68,6 +70,24 @@ enum VipPassStatus {
   REVOKED
 }
 
+/// Whether a built-in attendee field is asked for, and whether it must be answered.
+enum FieldMode {
+  HIDDEN
+  OPTIONAL
+  REQUIRED
+}
+
+/// Input control used for an organizer-defined question.
+enum CustomFieldType {
+  SHORT_TEXT
+  LONG_TEXT
+  NUMBER
+  SELECT
+  RADIO
+  MULTI_SELECT
+  CHECKBOX
+}
+
 enum TicketStatus {
   ISSUED
   CANCELLED
@@ -79,7 +99,11 @@ enum TicketStatus {
 model User {
   id              String   @id @default(uuid()) @db.Uuid
   email           String   @unique
-  passwordHash    String
+  /// Null for accounts that only ever sign in with Google.
+  passwordHash    String?
+  /// Google's stable subject id. Survives an email change, so it is the
+  /// primary way a returning Google account is recognised.
+  googleId        String?  @unique
   fullName        String
   rollNumber      String?
   department      String?
@@ -165,6 +189,12 @@ model TicketType {
   salesStartAt      DateTime? @db.Timestamptz(6)
   salesEndAt        DateTime? @db.Timestamptz(6)
   requiresStudentId Boolean   @default(true)
+
+  /// Which built-in attendee fields this ticket asks for. Name and email are
+  /// always collected: a ticket with neither cannot be delivered or checked.
+  phoneMode         FieldMode @default(OPTIONAL)
+  rollNumberMode    FieldMode @default(OPTIONAL)
+  departmentMode    FieldMode @default(OPTIONAL)
   transferable      Boolean   @default(false)
   maxPerUser        Int       @default(1)
 
@@ -179,12 +209,36 @@ model TicketType {
 
   event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   tickets Ticket[]
+  customFields   TicketTypeField[]
   manualPayments ManualPayment[]
   organizerUpiQr Upload? @relation("UpiQrUpload", fields: [organizerUpiQrUploadId], references: [id], onDelete: SetNull)
 
   @@unique([eventId, name])
   @@index([eventId])
   @@map("ticket_types")
+}
+
+/// A question an organizer adds to one ticket type's registration form.
+model TicketTypeField {
+  id           String          @id @default(uuid()) @db.Uuid
+  ticketTypeId String          @db.Uuid
+  label        String
+  /// Shown under the label to explain what is being asked for.
+  helpText     String?
+  /// Grey hint shown inside an empty input.
+  placeholder  String?
+  type         CustomFieldType @default(SHORT_TEXT)
+  required     Boolean         @default(false)
+  /// Choices for SELECT. Empty for every other type.
+  options      String[]        @default([])
+  sortOrder    Int             @default(0)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
+
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  @@index([ticketTypeId, sortOrder])
+  @@map("ticket_type_fields")
 }
 
 model Ticket {
@@ -208,6 +262,10 @@ model Ticket {
   attendeeRollNumber String?
   attendeeDepartment String?
   termsAcceptedAt    DateTime? @db.Timestamptz(6)
+  /// Answers to the organizer's own questions, keyed by TicketTypeField id.
+  /// Denormalised on purpose: an answer must survive the question being
+  /// edited or deleted, exactly like the attendee columns above.
+  customAnswers      Json?
 
   issuedAt         DateTime     @default(now()) @db.Timestamptz(6)
   checkedInAt      DateTime?    @db.Timestamptz(6)
@@ -289,7 +347,8 @@ model Upload {
   posterFor    Event[]         @relation("EventPoster")
   proofFor     ManualPayment[] @relation("PaymentProof")
 
-  @@index([uploadedById])
+  @@index([uploadedById])
+  hostAvatars EventHost[] @relation("HostAvatar")
   @@map("uploads")
 }
 
@@ -364,7 +423,8 @@ model EventHost {
   eventId   String   @db.Uuid
   name      String
   title     String?
-  photoUrl  String?
+  /// Optional headshot. Never required: most hosts are added without one.
+  avatarUploadId String? @db.Uuid
   instagram String?
   twitter   String?
   linkedin  String?
@@ -372,7 +432,8 @@ model EventHost {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  avatar Upload? @relation("HostAvatar", fields: [avatarUploadId], references: [id], onDelete: SetNull)
 
   @@index([eventId, sortOrder])
   @@map("event_hosts")

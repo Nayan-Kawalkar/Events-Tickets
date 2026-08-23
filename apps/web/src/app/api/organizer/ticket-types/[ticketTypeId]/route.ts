@@ -1,4 +1,5 @@
 import { prisma } from "@ct/db";
+import { revalidateEventById } from "@/lib/event-cache";
 import { audit } from "@/lib/audit";
 import { ok, fail, notFound, parseJson, sameOrigin, serverError } from "@/lib/api";
 import { canManageEvent } from "@/lib/authz";
@@ -84,6 +85,16 @@ export async function PATCH(request: Request, { params }: Params) {
     const updated = await prisma.ticketType.update({
       where: { id: ticketType.id },
       data: {
+        ...(input.phoneMode !== undefined ? { phoneMode: input.phoneMode as never } : {}),
+        ...(input.rollNumberMode !== undefined
+          ? {
+              rollNumberMode: input.rollNumberMode as never,
+              // Kept in step with the mode so the older flag never
+              // disagrees with the form the buyer actually sees.
+              requiresStudentId: input.rollNumberMode === "REQUIRED",
+            }
+          : {}),
+        ...(input.departmentMode !== undefined ? { departmentMode: input.departmentMode as never } : {}),
         ...(input.name !== undefined ? { name: input.name as string } : {}),
         ...(input.description !== undefined ? { description: (input.description as string) || null } : {}),
         ...(input.pricePaise !== undefined ? { pricePaise: input.pricePaise as number } : {}),
@@ -109,6 +120,8 @@ export async function PATCH(request: Request, { params }: Params) {
       action: "TICKET_TYPE_UPDATED",
       metadata: { eventId: ticketType.eventId, changedFields: Object.keys(input) },
     });
+
+    await revalidateEventById(ticketType.eventId);
 
     return ok({ ticketType: updated });
   } catch (err) {
@@ -159,6 +172,8 @@ export async function DELETE(request: Request, { params }: Params) {
       action: "TICKET_TYPE_DELETED",
       metadata: { eventId: ticketType.eventId, name: ticketType.name },
     });
+
+    await revalidateEventById(ticketType.eventId);
 
     return ok({ deleted: true });
   } catch (err) {

@@ -6,6 +6,7 @@ import { HostsEditor, type HostRow } from "@/components/hosts-editor";
 import { ScannersEditor, type ScannerRow } from "@/components/scanners-editor";
 import { VipPassesEditor, type VipPassRow } from "@/components/vip-passes-editor";
 import { TicketTypesEditor, type TicketTypeRow } from "@/components/ticket-types-editor";
+import { RegistrationFormEditor } from "@/components/registration-form-editor";
 import { ButtonLink, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { findManageableEvent } from "@/lib/authz";
@@ -48,6 +49,21 @@ export default async function EditEventPage({ params }: Props) {
         organizerUpiId: true,
         organizerUpiName: true,
         organizerUpiQrUploadId: true,
+        phoneMode: true,
+        rollNumberMode: true,
+        departmentMode: true,
+        customFields: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            label: true,
+            helpText: true,
+            placeholder: true,
+            type: true,
+            required: true,
+            options: true,
+          },
+        },
         _count: { select: { tickets: { where: { status: { in: LIVE } } } } },
       },
     }),
@@ -59,6 +75,7 @@ export default async function EditEventPage({ params }: Props) {
         id: true,
         name: true,
         title: true,
+        avatarUploadId: true,
         email: true,
         instagram: true,
         twitter: true,
@@ -143,6 +160,30 @@ export default async function EditEventPage({ params }: Props) {
         />
 
         <TicketTypesEditor eventId={event.id} ticketTypes={rows} eventCapacity={event.capacity} />
+
+        {/* What each ticket type asks its buyers. One panel per type,
+            because a VIP pass rarely needs what a student pass does. */}
+        {ticketTypes.map((t) => (
+          <RegistrationFormEditor
+            key={t.id}
+            ticketTypeId={t.id}
+            ticketTypeName={t.name}
+            initial={{
+              phoneMode: t.phoneMode,
+              rollNumberMode: t.rollNumberMode,
+              departmentMode: t.departmentMode,
+              fields: t.customFields.map((c) => ({
+                id: c.id,
+                label: c.label,
+                helpText: c.helpText ?? "",
+                placeholder: c.placeholder ?? "",
+                type: c.type,
+                required: c.required,
+                options: c.options,
+              })),
+            }}
+          />
+        ))}
 
         <HostsEditor eventId={event.id} hosts={hosts as HostRow[]} />
 

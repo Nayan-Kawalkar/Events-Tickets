@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth";
 export const metadata: Metadata = { title: "Users · Admin" };
 export const dynamic = "force-dynamic";
 
+
 type Props = { searchParams: Promise<{ q?: string; role?: string }> };
 
 export default async function AdminUsersPage({ searchParams }: Props) {
@@ -75,6 +76,7 @@ export default async function AdminUsersPage({ searchParams }: Props) {
       </div>
 
       <form method="get" className="mb-5 flex flex-wrap gap-2" role="search">
+        {roleFilter ? <input type="hidden" name="role" value={roleFilter} /> : null}
         <label htmlFor="q" className="sr-only">
           Search users
         </label>
@@ -96,7 +98,12 @@ export default async function AdminUsersPage({ searchParams }: Props) {
       <nav aria-label="Filter by role" className="mb-5 flex flex-wrap gap-2">
         {filters.map((filter) => {
           const active = (roleFilter ?? "") === filter.value;
-          const href = filter.value ? `/admin/users?role=${filter.value}` : "/admin/users";
+          // Keep the search when switching role, rather than resetting the list.
+          const params = new URLSearchParams();
+          if (q) params.set("q", q);
+          if (filter.value) params.set("role", filter.value);
+          const query = params.toString();
+          const href = query ? `/admin/users?${query}` : "/admin/users";
           return (
             <a
               key={filter.label}

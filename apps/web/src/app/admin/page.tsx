@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { prisma, EventStatus, ManualPaymentStatus, Role, TicketStatus } from "@ct/db";
 import { ButtonLink, Card, PageHeader, cx } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
+import { syncCompletedEvents } from "@/lib/event-status";
 import { formatDateTime, formatPrice } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Admin overview" };
@@ -18,6 +19,10 @@ export default async function AdminOverviewPage() {
   await requireRole([Role.ADMIN], "/admin");
 
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000);
+
+  // Forced past the throttle: this is the monitoring view, so its numbers are
+  // worth one extra round-trip. Awaited before the counts, never alongside them.
+  await syncCompletedEvents(true);
 
   const [
     users,

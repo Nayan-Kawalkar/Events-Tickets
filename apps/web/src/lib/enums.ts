@@ -38,3 +38,21 @@ export const PaymentMode = {
   MANUAL_UPI: "MANUAL_UPI",
 } as const;
 export type PaymentMode = (typeof PaymentMode)[keyof typeof PaymentMode];
+
+export const FieldMode = {
+  HIDDEN: "HIDDEN",
+  OPTIONAL: "OPTIONAL",
+  REQUIRED: "REQUIRED",
+} as const;
+export type FieldMode = (typeof FieldMode)[keyof typeof FieldMode];
+
+export const CustomFieldType = {
+  SHORT_TEXT: "SHORT_TEXT",
+  LONG_TEXT: "LONG_TEXT",
+  NUMBER: "NUMBER",
+  SELECT: "SELECT",
+  RADIO: "RADIO",
+  MULTI_SELECT: "MULTI_SELECT",
+  CHECKBOX: "CHECKBOX",
+} as const;
+export type CustomFieldType = (typeof CustomFieldType)[keyof typeof CustomFieldType];

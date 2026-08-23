@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { cx } from "./ui";
 
 const controlBase =
@@ -50,6 +52,52 @@ export function TextInput({
       aria-describedby={error && props.id ? `${props.id}-error` : undefined}
       className={cx(controlBase, error && "border-red-400/70 focus:ring-red-400/25", className)}
     />
+  );
+}
+
+/**
+ * Password field with a reveal toggle.
+ *
+ * Typing a password blind is where most sign-in failures actually come from, so
+ * the eye is worth the small exposure — it starts hidden and the caller decides
+ * nothing.
+ *
+ * The toggle is a real button with `type="button"`: inside a form, a bare
+ * button submits, which would post the form every time someone peeked.
+ */
+export function PasswordInput({
+  error,
+  className,
+  ...props
+}: React.ComponentProps<"input"> & { error?: string }) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && props.id ? `${props.id}-error` : undefined}
+        className={cx(controlBase, "pr-11", error && "border-red-400/70 focus:ring-red-400/25", className)}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        // The label carries the state, so a screen reader announces what the
+        // button will do rather than just "button".
+        aria-label={visible ? "Hide password" : "Show password"}
+        aria-pressed={visible}
+        title={visible ? "Hide password" : "Show password"}
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-slate-500 transition-colors hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+      >
+        {visible ? (
+          <EyeOff className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Eye className="h-4 w-4" aria-hidden="true" />
+        )}
+      </button>
+    </div>
   );
 }
 

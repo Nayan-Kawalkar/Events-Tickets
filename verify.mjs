@@ -101,6 +101,14 @@ function qrFor(publicId, endsAt) {
   return `v1.${publicId}.${exp}.${sig}`;
 }
 
+function vipPayloadFor(code, endsAt) {
+  const exp = Math.floor((new Date(endsAt).getTime() + Number(process.env.QR_TTL_SECONDS ?? 21600) * 1000) / 1000);
+  const sig = createHmac("sha256", process.env.QR_SIGNING_SECRET)
+    .update(`vip1.${code}.${exp}`)
+    .digest("base64url");
+  return `vip1.${code}.${exp}.${sig}`;
+}
+
 const made = { users: [], events: [] };
 
 async function setup() {
@@ -170,6 +178,7 @@ async function cleanup(ctx) {
   await client.query('delete from scanner_assignments where "eventId" = any($1) or "userId" = any($2)', [evs, ids]);
   await client.query('delete from manual_payments where "eventId" = any($1) or "userId" = any($2)', [evs, ids]);
   await client.query('delete from tickets where "eventId" = any($1) or "ownerUserId" = any($2)', [evs, ids]);
+  await client.query('delete from vip_passes where "eventId" = any($1) or "createdByUserId" = any($2)', [evs, ids]);
   await client.query('delete from event_hosts where "eventId" = any($1)', [evs]);
   await client.query('delete from ticket_types where "eventId" = any($1)', [evs]);
   await client.query('delete from events where id = any($1) or "createdById" = any($2)', [evs, ids]);
@@ -461,6 +470,136 @@ async function run() {
     };
   }, (v) => v.showsNotFound && !v.leaksTicketUi);
   await expect("pages", "404 page for unknown route", () => page("/no-such-page-zz"), (r) => r.code === 404);
+
+  // ---- VIP guest passes ---------------------------------------------------
+  // Holding the link is the whole entitlement: no account, no registration.
+  const issueVip = (name) =>
+    req(`/api/organizer/events/${c.eventId}/vip-passes`, { method: "POST", cookie: cookies.organizer, json: { guestName: name } });
+
+  await expect("vip", "student cannot issue a guest pass",
+    () => req(`/api/organizer/events/${c.eventId}/vip-passes`, { method: "POST", cookie: cookies.s1, json: { guestName: "ZZ Gatecrasher" } }),
+    (r) => r.code === 403);
+
+  await expect("vip", "organizer issues a guest pass", () => issueVip("ZZ Chief Guest"),
+    (r) => r.code === 201 && typeof r.body?.pass?.code === "string");
+
+  const vip = (await issueVip("ZZ Sponsor")).body.pass;
+
+  await expect("vip", "pass page opens with no account", () => page(`/vip/${vip.code}`),
+    (r) => r.code === 200 && r.html.includes("ZZ Sponsor"));
+
+  await expect("vip", "unknown pass code is 404", () => page("/vip/vip_nope-zz"),
+    (r) => r.code === 404 || /could not be found/i.test(r.html));
+
+  const vipQr = vipPayloadFor(vip.code, c.endsAt);
+  const scanVip = (payload) =>
+    req("/api/checkin/validate", { method: "POST", cookie: cookies.volunteer, json: { eventId: c.eventId, gateId: "Main", qrPayload: payload } });
+
+  await expect("vip", "tampered pass signature rejected",
+    () => scanVip(vipQr.slice(0, -1) + (vipQr.endsWith("A") ? "B" : "A")),
+    (r) => r.body?.status === "REJECTED");
+
+  await expect("vip", "guest admitted at the gate", () => scanVip(vipQr),
+    (r) => r.body?.status === "APPROVED");
+
+  await expect("vip", "pass cannot be reused", () => scanVip(vipQr),
+    (r) => r.body?.status === "REJECTED" && r.body?.reason === "VIP_PASS_USED");
+
+  const revoked = (await issueVip("ZZ Uninvited")).body.pass;
+  await expect("vip", "revoked pass is refused", async () => {
+    await req(`/api/organizer/vip-passes/${revoked.id}`, { method: "DELETE", cookie: cookies.organizer });
+    return scanVip(vipPayloadFor(revoked.code, c.endsAt));
+  }, (r) => r.body?.status === "REJECTED" && r.body?.reason === "VIP_PASS_REVOKED");
+
+  // ---- Google sign-in -----------------------------------------------------
+  // Adapts to configuration: with credentials set the handshake is checked,
+  // without them the feature must be cleanly absent rather than half-present.
+  const loginHtml = (await page("/login")).html;
+  const googleOn = loginHtml.includes("Continue with Google");
+
+  if (googleOn) {
+    await expect("google", "start redirects to Google with PKCE", async () => {
+      const r = await fetch(`${BASE}/api/auth/google`, { redirect: "manual" });
+      const loc = new URL(r.headers.get("location"));
+      return {
+        host: loc.host,
+        method: loc.searchParams.get("code_challenge_method"),
+        hasState: (loc.searchParams.get("state") || "").length > 10,
+        hasNonce: (loc.searchParams.get("nonce") || "").length > 10,
+      };
+    }, (v) => v.host === "accounts.google.com" && v.method === "S256" && v.hasState && v.hasNonce);
+
+    // Must carry the flow cookie from a real start, otherwise the missing
+    // cookie is caught first and the state check is never reached.
+    await expect("google", "callback refuses a forged state", async () => {
+      const start = await fetch(`${BASE}/api/auth/google`, { redirect: "manual" });
+      const flow = (start.headers.get("set-cookie").match(/ct_oauth=[^;]+/) || [""])[0];
+      const r = await fetch(`${BASE}/api/auth/google/callback?state=wrong&code=x`, {
+        redirect: "manual",
+        headers: { Cookie: flow },
+      });
+      return new URL(r.headers.get("location")).search;
+    }, (v) => v === "?error=bad_state");
+
+    // A person declining at Google's screen is a choice, not a failure.
+    await expect("google", "cancelling at Google returns quietly", async () => {
+      const start = await fetch(`${BASE}/api/auth/google`, { redirect: "manual" });
+      const flow = (start.headers.get("set-cookie").match(/ct_oauth=[^;]+/) || [""])[0];
+      const r = await fetch(`${BASE}/api/auth/google/callback?error=access_denied`, {
+        redirect: "manual",
+        headers: { Cookie: flow },
+      });
+      const loc = new URL(r.headers.get("location"));
+      return loc.pathname + loc.search;
+    }, (v) => v === "/login");
+
+    // Anything else from the provider is a real fault and must say so.
+    await expect("google", "provider fault surfaces an error", async () => {
+      const start = await fetch(`${BASE}/api/auth/google`, { redirect: "manual" });
+      const flow = (start.headers.get("set-cookie").match(/ct_oauth=[^;]+/) || [""])[0];
+      const r = await fetch(`${BASE}/api/auth/google/callback?error=temporarily_unavailable`, {
+        redirect: "manual",
+        headers: { Cookie: flow },
+      });
+      return new URL(r.headers.get("location")).search;
+    }, (v) => v === "?error=google_failed");
+
+    await expect("google", "failed attempts reach the audit trail", async () => {
+      const q = `select count(*)::int n from audit_logs where action='USER_LOGIN_FAILED' and metadata->>'provider'='google'`;
+      const before = (await client.query(q)).rows[0].n;
+      const start = await fetch(`${BASE}/api/auth/google`, { redirect: "manual" });
+      const flow = (start.headers.get("set-cookie").match(/ct_oauth=[^;]+/) || [""])[0];
+      await fetch(`${BASE}/api/auth/google/callback?state=wrong&code=x`, { redirect: "manual", headers: { Cookie: flow } });
+      const after = (await client.query(q)).rows[0].n;
+      return after - before;
+    }, (v) => v >= 1);
+
+    await expect("google", "callback refuses a missing flow cookie", async () => {
+      const r = await fetch(`${BASE}/api/auth/google/callback?state=x&code=x`, { redirect: "manual" });
+      return new URL(r.headers.get("location")).search;
+    }, (v) => v === "?error=expired");
+  } else {
+    await expect("google", "unconfigured: no button rendered", () => loginHtml, (v) => !v.includes("Continue with Google"));
+    await expect("google", "unconfigured: start route refuses", async () => {
+      const r = await fetch(`${BASE}/api/auth/google`, { redirect: "manual" });
+      return new URL(r.headers.get("location")).search;
+    }, (v) => v === "?error=google_unavailable");
+  }
+
+  // True whichever way Google is configured: an account with no password set
+  // cannot be entered with one, and the refusal looks like any other.
+  await expect("google", "password login refused when no password is set", async () => {
+    const email = `${PREFIX}-nopw-${Date.now()}@example.com`;
+    const id = randomUUID();
+    made.users.push(id);
+    await client.query(
+      `INSERT INTO users (id,email,"passwordHash","fullName",role,"isEmailVerified","createdAt","updatedAt")
+       VALUES ($1,$2,NULL,'ZZ No Password','STUDENT',true,now(),now())`,
+      [id, email],
+    );
+    const r = await req("/api/auth/login", { method: "POST", json: { email, password: "Password123!" } });
+    return { code: r.code, error: r.body?.error };
+  }, (v) => v.code === 401 && v.error === "INVALID_CREDENTIALS");
 
   await cleanup(c);
   await client.end();

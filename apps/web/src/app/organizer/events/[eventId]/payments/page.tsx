@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma, ManualPaymentStatus, Role } from "@ct/db";
+import { FilterChips, SearchBox } from "@/components/list-controls";
 import { PaymentReviewCard, type PendingPayment } from "@/components/payment-review";
 import { Alert, ButtonLink, Card, EmptyState, PageHeader, cx } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
@@ -11,10 +12,23 @@ import { uuidSchema } from "@/lib/validation";
 export const metadata: Metadata = { title: "Payment verification" };
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ eventId: string }> };
+/** History only: the pending queue is by definition all still pending. */
+const HISTORY_FILTERS = [
+  { label: "All", value: "" },
+  { label: "Verified", value: ManualPaymentStatus.VERIFIED },
+  { label: "Rejected", value: ManualPaymentStatus.REJECTED },
+] as const;
 
-export default async function PaymentsPage({ params }: Props) {
-  const user = await requireRole([Role.ORGANIZER, Role.ADMIN]);
+type Props = {
+  params: Promise<{ eventId: string }>;
+  searchParams: Promise<{ q?: string; status?: string }>;
+};
+
+export default async function PaymentsPage({ params, searchParams }: Props) {
+  const [user, sp] = await Promise.all([
+    requireRole([Role.ORGANIZER, Role.ADMIN]),
+    searchParams,
+  ]);
 
   const idResult = uuidSchema.safeParse((await params).eventId);
   if (!idResult.success) notFound();
@@ -23,9 +37,26 @@ export default async function PaymentsPage({ params }: Props) {
   const event = await findManageableEvent(user, idResult.data);
   if (!event) notFound();
 
-  const [pending, handled] = await Promise.all([
+  const q = sp.q?.trim() ?? "";
+  const historyStatus = HISTORY_FILTERS.some((f) => f.value && f.value === sp.status)
+    ? (sp.status as ManualPaymentStatus)
+    : "";
+
+  // Payer name, email, or the UTR they typed — the three things an organizer
+  // has to hand when someone asks "where is my ticket?".
+  const matching = q
+    ? {
+        OR: [
+          { user: { fullName: { contains: q, mode: "insensitive" as const } } },
+          { user: { email: { contains: q, mode: "insensitive" as const } } },
+          { upiTransactionId: { contains: q, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+
+  const [pending, handled, pendingTotal] = await Promise.all([
     prisma.manualPayment.findMany({
-      where: { eventId: event.id, status: ManualPaymentStatus.PENDING },
+      where: { eventId: event.id, status: ManualPaymentStatus.PENDING, ...matching },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
@@ -39,7 +70,11 @@ export default async function PaymentsPage({ params }: Props) {
       },
     }),
     prisma.manualPayment.findMany({
-      where: { eventId: event.id, status: { not: ManualPaymentStatus.PENDING } },
+      where: {
+        eventId: event.id,
+        status: historyStatus ? historyStatus : { not: ManualPaymentStatus.PENDING },
+        ...matching,
+      },
       orderBy: { verifiedAt: "desc" },
       take: 50,
       select: {
@@ -52,6 +87,9 @@ export default async function PaymentsPage({ params }: Props) {
         user: { select: { fullName: true, email: true } },
         verifiedBy: { select: { fullName: true } },
       },
+    }),
+    prisma.manualPayment.count({
+      where: { eventId: event.id, status: ManualPaymentStatus.PENDING },
     }),
   ]);
 
@@ -80,7 +118,7 @@ export default async function PaymentsPage({ params }: Props) {
     <>
       <PageHeader
         title={`Payments · ${event.title}`}
-        description={`${queue.length} awaiting verification`}
+        description={`${pendingTotal} awaiting verification`}
         action={
           <div className="flex flex-wrap gap-2">
             <ButtonLink href={`/scanner?event=${event.id}`}>Scan tickets</ButtonLink>
@@ -101,13 +139,25 @@ export default async function PaymentsPage({ params }: Props) {
         </Alert>
       </div>
 
+      <div className="mb-6">
+        <SearchBox
+          action={`/organizer/events/${event.id}/payments`}
+          value={q}
+          placeholder="Search payer name, email or UTR"
+          hidden={{ status: historyStatus }}
+        />
+      </div>
+
       <section aria-labelledby="queue" className="mb-10">
         <h2 id="queue" className="mb-3 font-display text-xl font-normal text-slate-900">
           Awaiting verification
         </h2>
 
         {queue.length === 0 ? (
-          <EmptyState title="Nothing to verify" description="New UPI payments will appear here." />
+          <EmptyState
+            title={q ? "No pending payments match that search" : "Nothing to verify"}
+            description={q ? undefined : "New UPI payments will appear here."}
+          />
         ) : (
           <ul className="space-y-4">
             {queue.map((payment) => (
@@ -124,9 +174,24 @@ export default async function PaymentsPage({ params }: Props) {
           Already handled
         </h2>
 
+        <div className="mb-3">
+          <FilterChips
+            label="Filter handled payments"
+            basePath={`/organizer/events/${event.id}/payments`}
+            param="status"
+            current={historyStatus}
+            options={HISTORY_FILTERS}
+            params={{ q }}
+          />
+        </div>
+
         {handled.length === 0 ? (
           <Card>
-            <p className="text-sm text-slate-600">No payments have been handled yet.</p>
+            <p className="text-sm text-slate-600">
+              {q || historyStatus
+                ? "No handled payments match this view."
+                : "No payments have been handled yet."}
+            </p>
           </Card>
         ) : (
           <ul className="space-y-2">

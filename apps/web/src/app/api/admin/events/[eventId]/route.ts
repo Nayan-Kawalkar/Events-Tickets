@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { revalidateEventById, revalidateEvents } from "@/lib/event-cache";
 import { prisma, EventStatus } from "@ct/db";
 import { audit } from "@/lib/audit";
 import { ok, fail, notFound, parseJson, sameOrigin, serverError } from "@/lib/api";
@@ -46,6 +47,8 @@ export async function PATCH(request: Request, { params }: Params) {
       metadata: { title: event.title, from: event.status, to: updated.status },
     });
 
+    await revalidateEventById(event.id);
+
     return ok({ event: updated });
   } catch (err) {
     return serverError("admin update event", err);
@@ -88,6 +91,8 @@ export async function DELETE(request: Request, { params }: Params) {
       action: "ADMIN_EVENT_DELETED",
       metadata: { title: event.title, slug: event.slug },
     });
+
+    revalidateEvents(event.slug);
 
     return ok({ deleted: true });
   } catch (err) {

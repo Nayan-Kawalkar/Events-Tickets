@@ -1,4 +1,5 @@
 import { prisma } from "@ct/db";
+import { revalidateEvents } from "@/lib/event-cache";
 import { audit } from "@/lib/audit";
 import { ok, fail, parseJson, sameOrigin, serverError } from "@/lib/api";
 import { requireOrganizerApi } from "@/lib/organizer-guard";
@@ -50,6 +51,9 @@ export async function POST(request: Request) {
       action: "EVENT_CREATED",
       metadata: { title: event.title, slug: event.slug, status: event.status },
     });
+
+    // A new event changes what the catalogue should show.
+    revalidateEvents(event.slug);
 
     return ok({ event }, 201);
   } catch (err) {

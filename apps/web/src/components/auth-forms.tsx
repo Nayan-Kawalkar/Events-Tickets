@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Field, TextInput } from "./form";
+import { Field, TextInput, PasswordInput } from "./form";
 import { Alert, Button } from "./ui";
 
 type ApiErrorBody = { error?: string; message?: string; fields?: Record<string, string> };
@@ -69,10 +69,9 @@ export function LoginForm({ next }: { next: string }) {
       </Field>
 
       <Field label="Password" htmlFor="password" error={fields.password} required>
-        <TextInput
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
           error={fields.password}
@@ -86,7 +85,7 @@ export function LoginForm({ next }: { next: string }) {
   );
 }
 
-export function RegisterForm() {
+export function RegisterForm({ next }: { next: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -108,7 +107,7 @@ export function RegisterForm() {
     });
 
     if (result.ok) {
-      router.push("/dashboard");
+      router.push(next);
       router.refresh();
       return;
     }
@@ -145,10 +144,9 @@ export function RegisterForm() {
         hint="At least 10 characters, including a letter and a number."
         required
       >
-        <TextInput
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="new-password"
           required
           error={fields.password}

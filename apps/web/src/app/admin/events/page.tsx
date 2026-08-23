@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { prisma, ManualPaymentStatus, Role, TicketStatus } from "@ct/db";
+import { prisma, EventStatus, ManualPaymentStatus, Role, TicketStatus } from "@ct/db";
 import { AdminEventActions } from "@/components/admin-actions";
+import { FilterChips, ResultCount, SearchBox } from "@/components/list-controls";
 import { ButtonLink, Card, EmptyState, EventStatusBadge, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
@@ -8,10 +9,41 @@ import { formatDateTime } from "@/lib/format";
 export const metadata: Metadata = { title: "Events · Admin" };
 export const dynamic = "force-dynamic";
 
-export default async function AdminEventsPage() {
-  await requireRole([Role.ADMIN]);
+const STATUS_FILTERS = [
+  { label: "All", value: "" },
+  { label: "Draft", value: EventStatus.DRAFT },
+  { label: "Published", value: EventStatus.PUBLISHED },
+  { label: "Closed", value: EventStatus.CLOSED },
+  { label: "Past", value: EventStatus.COMPLETED },
+  { label: "Cancelled", value: EventStatus.CANCELLED },
+] as const;
 
-  const events = await prisma.event.findMany({
+type Props = { searchParams: Promise<{ q?: string; status?: string }> };
+
+export default async function AdminEventsPage({ searchParams }: Props) {
+  const [, sp] = await Promise.all([requireRole([Role.ADMIN]), searchParams]);
+
+  const q = sp.q?.trim() ?? "";
+  const status = STATUS_FILTERS.some((f) => f.value && f.value === sp.status)
+    ? (sp.status as EventStatus)
+    : "";
+
+  const [events, totalEvents] = await Promise.all([
+    prisma.event.findMany({
+    where: {
+      ...(status ? { status } : {}),
+      // Title, slug or venue — an admin is usually hunting a name they
+      // half-remember from a support message.
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: "insensitive" as const } },
+              { slug: { contains: q, mode: "insensitive" as const } },
+              { venue: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { startsAt: "desc" },
     take: 200,
     select: {
@@ -30,7 +62,9 @@ export default async function AdminEventsPage() {
         },
       },
     },
-  });
+    }),
+    prisma.event.count(),
+  ]);
 
   const checkedIn = await prisma.ticket.groupBy({
     by: ["eventId"],
@@ -43,8 +77,28 @@ export default async function AdminEventsPage() {
     <>
       <PageHeader title="Events" description="Every event across the college." />
 
+      <div className="mb-5 space-y-3">
+        <SearchBox
+          action="/admin/events"
+          value={q}
+          placeholder="Search by title, slug or venue"
+          hidden={{ status }}
+        />
+
+        <FilterChips
+          label="Filter by status"
+          basePath="/admin/events"
+          param="status"
+          current={status}
+          options={STATUS_FILTERS}
+          params={{ q }}
+        />
+
+        <ResultCount shown={events.length} total={totalEvents} noun="event" />
+      </div>
+
       {events.length === 0 ? (
-        <EmptyState title="No events yet" />
+        <EmptyState title={q || status ? "No events match that view" : "No events yet"} />
       ) : (
         <ul className="space-y-3">
           {events.map((event) => (

@@ -26,9 +26,9 @@ export async function GET(_request: Request, { params }: Params) {
     });
     if (!upload) return notFound();
 
-    // Event posters are public: the events list renders them for signed-out
-    // visitors, so requiring a session here would break the front page.
-    if (upload.kind === UploadKind.EVENT_POSTER) {
+    // Posters and host headshots are public: both render on pages a
+    // signed-out visitor can see, so requiring a session would break them.
+    if (upload.kind === UploadKind.EVENT_POSTER || upload.kind === UploadKind.HOST_AVATAR) {
       return new Response(Buffer.from(upload.data), {
         headers: {
           "Content-Type": upload.mimeType,

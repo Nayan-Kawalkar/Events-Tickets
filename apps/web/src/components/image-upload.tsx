@@ -12,7 +12,7 @@ export function ImageUpload({
   hint,
   previewClassName = "aspect-video w-full max-w-sm",
 }: {
-  kind: "EVENT_POSTER" | "UPI_QR";
+  kind: "EVENT_POSTER" | "UPI_QR" | "HOST_AVATAR";
   uploadId: string;
   onUploaded: (uploadId: string) => void;
   label: string;

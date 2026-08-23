@@ -2,15 +2,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { RegisterForm } from "@/components/auth-forms";
+import { GoogleButton } from "@/components/google-button";
 import { Card } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
+import { safeNext } from "@/lib/nav";
 import { allowedEmailDomains } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Create account" };
 
-export default async function RegisterPage() {
+type Props = { searchParams: Promise<{ next?: string }> };
+
+export default async function RegisterPage({ searchParams }: Props) {
+  const next = safeNext((await searchParams).next);
   const user = await getCurrentUser();
-  if (user) redirect("/dashboard");
+  if (user) redirect(next);
 
   return (
     <div className="mx-auto w-full max-w-md">
@@ -22,12 +27,13 @@ export default async function RegisterPage() {
       </p>
 
       <Card>
-        <RegisterForm />
+        <RegisterForm next={next} />
+        <GoogleButton next={next} label="Sign up with Google" />
       </Card>
 
       <p className="mt-4 text-sm text-slate-600">
         Already registered?{" "}
-        <Link href="/login" className="font-medium text-brand-400 underline-offset-2 hover:underline">
+        <Link href={`/login?next=${encodeURIComponent(next)}`} className="font-medium text-brand-400 underline-offset-2 hover:underline">
           Sign in
         </Link>
       </p>

@@ -3,6 +3,9 @@ import { prisma, EventStatus, type TicketStatus } from "@ct/db";
 import { Poster } from "@/components/poster";
 import { ButtonLink, EmptyState, TicketStatusBadge } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
+import { UpdatesPanel } from "@/components/updates-panel";
+import { getPastEvents, getPublishedEvents } from "@/lib/event-cache";
+import { recentUpdates } from "@/lib/updates";
 import { syncCompletedEvents } from "@/lib/event-status";
 import { formatPrice } from "@/lib/format";
 import { LIVE_TICKET_STATUS_LIST } from "@/lib/ticket-status";
@@ -51,24 +54,12 @@ export default async function HomePage() {
   // never lingers in "upcoming" after it has ended.
   const [user] = await Promise.all([getCurrentUser(), syncCompletedEvents()]);
 
+  // Per-user and deliberately uncached: a stale "your ticket is ready" is
+  // worse than none at all.
+  const updates = await recentUpdates(user);
+
   // Only published events are ever exposed publicly, and only ones still ahead.
-  const events: EventRow[] = await prisma.event.findMany({
-    where: { status: EventStatus.PUBLISHED, endsAt: { gte: new Date() } },
-    orderBy: { startsAt: "asc" },
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      description: true,
-      venue: true,
-      startsAt: true,
-      capacity: true,
-      createdById: true,
-      posterUploadId: true,
-      _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
-      ticketTypes: { select: { pricePaise: true } },
-    },
-  });
+  const events: EventRow[] = await getPublishedEvents();
 
   // Events this person is already going to. Past events drop off on their own
   // so the section stays a to-do list rather than a history.
@@ -119,20 +110,7 @@ export default async function HomePage() {
     : [];
 
   // Anything already finished belongs in its own section, not the main list.
-  const pastEvents = await prisma.event.findMany({
-    where: { status: EventStatus.COMPLETED, endsAt: { lt: new Date() } },
-    orderBy: { endsAt: "desc" },
-    take: 6,
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      venue: true,
-      endsAt: true,
-      posterUploadId: true,
-      _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
-    },
-  });
+  const pastEvents = await getPastEvents();
 
   const [featured, ...rest] = events;
 
@@ -146,6 +124,10 @@ export default async function HomePage() {
           desk — just show the QR at the gate.
         </p>
       </header>
+
+      {/* Above the listings on purpose: something needing your attention —
+          a verified payment, a queue waiting on you — outranks browsing. */}
+      <UpdatesPanel updates={updates} />
 
       {/* Order: the next event first, then what you are already going to,
           then everything else. */}

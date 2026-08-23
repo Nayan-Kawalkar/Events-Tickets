@@ -68,10 +68,22 @@ export function ScannerClient({
     };
   }, []);
 
-  /** Distinct feedback for approved vs rejected, so volunteers need not read. */
-  const signal = useCallback((approved: boolean) => {
+  /**
+   * Three outcomes, three sounds, so a volunteer never has to read the screen.
+   *
+   * "Already used" is deliberately its own signal rather than a plain rejection:
+   * it calls for a different response at the gate. An invalid QR means refuse
+   * entry; a ticket already scanned means talk to the person in front of you,
+   * because either they are trying it twice or someone came in on their ticket.
+   * Those sounding identical is what made the distinction easy to miss.
+   */
+  const signal = useCallback((kind: "approved" | "duplicate" | "rejected") => {
     if (typeof navigator !== "undefined" && navigator.vibrate) {
-      navigator.vibrate(approved ? 80 : [90, 70, 90]);
+      // Approved is one pulse, duplicate a quick double, rejection a long
+      // stutter — recognisable in a pocket as well as through the speaker.
+      navigator.vibrate(
+        kind === "approved" ? 80 : kind === "duplicate" ? [40, 60, 40] : [90, 70, 90],
+      );
     }
     try {
       const Ctx =
@@ -79,15 +91,33 @@ export function ScannerClient({
         (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return;
       const ctx = new Ctx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = approved ? 880 : 220;
-      gain.gain.value = 0.08;
-      osc.start();
-      osc.stop(ctx.currentTime + (approved ? 0.12 : 0.32));
-      osc.onended = () => ctx.close();
+
+      const tone = (frequency: number, startAt: number, seconds: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = frequency;
+        gain.gain.value = 0.08;
+        osc.start(ctx.currentTime + startAt);
+        osc.stop(ctx.currentTime + startAt + seconds);
+        return osc;
+      };
+
+      let last: OscillatorNode;
+      if (kind === "approved") {
+        last = tone(880, 0, 0.12);
+      } else if (kind === "duplicate") {
+        // Two mid pips: neither the high single note of a pass nor the low
+        // buzz of a refusal, so it cannot be mistaken for either.
+        tone(520, 0, 0.09);
+        last = tone(520, 0.14, 0.09);
+      } else {
+        last = tone(220, 0, 0.32);
+      }
+
+      // Closed once the final tone finishes; closing earlier cuts it short.
+      last.onended = () => ctx.close();
     } catch {
       // Audio is a nicety; never let it break scanning.
     }
@@ -130,7 +160,16 @@ export function ScannerClient({
 
       setOutcome(result);
       const approved = result.status === "APPROVED";
-      signal(approved);
+
+      // Every "this pass was already scanned" reason, whatever kind of pass it
+      // was, so a VIP or master pass sounds the same as a ticket.
+      const alreadyUsed =
+        result.status === "REJECTED" &&
+        (result.reason === "ALREADY_USED" ||
+          result.reason === "VIP_PASS_USED" ||
+          result.reason === "SUPER_PASS_USED");
+
+      signal(approved ? "approved" : alreadyUsed ? "duplicate" : "rejected");
 
       setRecent((prev) =>
         [

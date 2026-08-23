@@ -13,6 +13,7 @@ import { Poster } from "@/components/poster";
 import { Alert, ButtonLink, Card, EventStatusBadge, PageHeader } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageEvent } from "@/lib/authz";
+import { getEventBySlug } from "@/lib/event-cache";
 import { effectiveStatus } from "@/lib/event-status";
 import { formatDateTime, formatPrice } from "@/lib/format";
 import { LIVE_TICKET_STATUS_LIST } from "@/lib/ticket-status";
@@ -21,68 +22,9 @@ export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }> };
 
-async function loadEvent(slug: string) {
-  // Fetched regardless of status; visibility is decided below, because a host
-  // needs to open their own draft from the same link everyone else uses.
-  return prisma.event.findFirst({
-    where: { slug },
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      venue: true,
-      startsAt: true,
-      endsAt: true,
-      registrationOpensAt: true,
-      registrationClosesAt: true,
-      status: true,
-      capacity: true,
-      createdById: true,
-      slug: true,
-      posterUploadId: true,
-      hostOrganization: true,
-      addressLine: true,
-      latitude: true,
-      longitude: true,
-      contactEmail: true,
-      contactPhone: true,
-      hosts: {
-        orderBy: { sortOrder: "asc" },
-        select: {
-          id: true,
-          name: true,
-          title: true,
-          email: true,
-          instagram: true,
-          twitter: true,
-          linkedin: true,
-        },
-      },
-      _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
-      ticketTypes: {
-        orderBy: { pricePaise: "asc" },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          pricePaise: true,
-          capacity: true,
-          salesStartAt: true,
-          salesEndAt: true,
-          requiresStudentId: true,
-          transferable: true,
-          maxPerUser: true,
-          paymentMode: true,
-          organizerUpiId: true,
-          _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
-        },
-      },
-    },
-  });
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const event = await loadEvent((await params).slug);
+  const event = await getEventBySlug((await params).slug);
   return { title: event?.title ?? "Event not found" };
 }
 
@@ -90,7 +32,7 @@ export default async function EventDetailPage({ params }: Props) {
   const { slug } = await params;
   // Independent queries: issue them together rather than paying two
   // round-trips to the database in series.
-  const [event, user] = await Promise.all([loadEvent(slug), getCurrentUser()]);
+  const [event, user] = await Promise.all([getEventBySlug(slug), getCurrentUser()]);
   if (!event) notFound();
 
   const isHost = user ? canManageEvent(user, event) : false;

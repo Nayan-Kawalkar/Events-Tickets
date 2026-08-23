@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EventStatus, PaymentMode } from "./enums";
+import { EventStatus, PaymentMode, CustomFieldType, FieldMode } from "./enums";
 
 export { slugify } from "./slug";
 
@@ -112,6 +112,9 @@ export const eventHostSchema = z
     instagram: z.string().trim().max(200).optional().or(z.literal("")),
     twitter: z.string().trim().max(200).optional().or(z.literal("")),
     linkedin: z.string().trim().max(200).optional().or(z.literal("")),
+    // Optional throughout: a host without a picture is the normal case.
+    // Written inline rather than reusing `uuidSchema`, which is declared below.
+    avatarUploadId: z.string().uuid("Invalid image").optional().or(z.literal("")),
   })
   .strict();
 
@@ -155,6 +158,9 @@ const ticketTypeFields = {
   salesStartAt: optionalDateTime,
   salesEndAt: optionalDateTime,
   requiresStudentId: z.coerce.boolean(),
+  phoneMode: z.nativeEnum(FieldMode).optional(),
+  rollNumberMode: z.nativeEnum(FieldMode).optional(),
+  departmentMode: z.nativeEnum(FieldMode).optional(),
   transferable: z.coerce.boolean(),
   maxPerUser: z.coerce.number().int().min(1, "At least 1").max(20, "At most 20"),
   paymentMode: z.nativeEnum(PaymentMode),
@@ -213,6 +219,10 @@ export const attendeeDetailsSchema = z
       .or(z.literal("")),
     attendeeRollNumber: z.string().trim().max(40).optional().or(z.literal("")),
     attendeeDepartment: z.string().trim().max(120).optional().or(z.literal("")),
+    // Shape only. Which questions exist, which are required and what
+    // counts as a valid answer depends on the ticket type, so that check
+    // happens where the ticket type is loaded.
+    customAnswers: z.record(z.string().max(2000)).optional(),
     acceptTerms: z.literal(true, {
       errorMap: () => ({ message: "You must accept the event rules to register" }),
     }),
@@ -225,3 +235,36 @@ export const uuidSchema = z.string().uuid("Invalid identifier");
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type CreateTicketTypeInput = z.infer<typeof createTicketTypeSchema>;
+
+/**
+ * One organizer-defined question.
+ *
+ * `id` is present when editing an existing question and absent when adding
+ * one, which is how the sync tells the two apart.
+ */
+export const customFieldSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    label: z.string().trim().min(1, "Give the question a label").max(120),
+    helpText: z.string().trim().max(200).optional().or(z.literal("")),
+    placeholder: z.string().trim().max(80).optional().or(z.literal("")),
+    type: z.nativeEnum(CustomFieldType),
+    required: z.coerce.boolean(),
+    options: z.array(z.string().trim().min(1).max(120)).max(30).default([]),
+  })
+  .strict()
+  .refine(
+    (f) =>
+      (f.type !== CustomFieldType.SELECT &&
+        f.type !== CustomFieldType.RADIO &&
+        f.type !== CustomFieldType.MULTI_SELECT) ||
+      f.options.length > 0,
+    {
+    message: "A dropdown needs at least one option",
+    path: ["options"],
+  });
+
+/** The full set for one ticket type, replacing whatever is stored. */
+export const customFieldsSchema = z
+  .object({ fields: z.array(customFieldSchema).max(20, "At most 20 questions") })
+  .strict();

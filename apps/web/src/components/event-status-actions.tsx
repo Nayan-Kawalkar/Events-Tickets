@@ -26,7 +26,18 @@ export function EventStatusActions({ eventId, status }: { eventId: string; statu
     router.refresh();
   }
 
-  if (status === EventStatus.CANCELLED || status === EventStatus.COMPLETED) return null;
+  if (status === EventStatus.CANCELLED) return null;
+
+  // A completed event has no status action worth offering: re-publishing it
+  // while its end date is in the past would just age it back to COMPLETED on
+  // the next listing. Point at the real fix instead.
+  if (status === EventStatus.COMPLETED) {
+    return (
+      <span className="text-xs text-slate-500">
+        Finished. To reopen it, change the end date first.
+      </span>
+    );
+  }
 
   return (
     <>

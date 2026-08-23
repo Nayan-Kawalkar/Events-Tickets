@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma, EventStatus, Role, TicketStatus } from "@ct/db";
 import { EventStatusActions } from "@/components/event-status-actions";
+import { SearchBox } from "@/components/list-controls";
 import { ButtonLink, Card, EmptyState, EventStatusBadge, PageHeader, cx } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { syncCompletedEvents } from "@/lib/event-status";
@@ -18,10 +19,10 @@ const FILTERS = [
   { label: "Past", value: EventStatus.COMPLETED },
 ] as const;
 
-type Props = { searchParams: Promise<{ status?: string }> };
+type Props = { searchParams: Promise<{ status?: string; q?: string }> };
 
 export default async function OrganizerEventsPage({ searchParams }: Props) {
-  const [user, { status }] = await Promise.all([
+  const [user, { status, q: rawQ }] = await Promise.all([
     requireRole([Role.ORGANIZER, Role.ADMIN], "/organizer/events"),
     searchParams,
     syncCompletedEvents(),
@@ -32,11 +33,31 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
       ? (status as EventStatus)
       : undefined;
 
+  const q = rawQ?.trim() ?? "";
+
+  /** Keep whichever of search and status is already set. */
+  const buildHref = (value: string) => {
+    const search = new URLSearchParams();
+    if (q) search.set("q", q);
+    if (value) search.set("status", value);
+    const qs = search.toString();
+    return qs ? `/organizer/events?${qs}` : "/organizer/events";
+  };
+
   const events = await prisma.event.findMany({
     where: {
       // Organizers see only their own events; admins see all.
       ...(user.role === Role.ADMIN ? {} : { createdById: user.id }),
       ...(statusFilter ? { status: statusFilter } : {}),
+      // Title or venue: what an organizer actually remembers about an event.
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: "insensitive" as const } },
+              { venue: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
     },
     orderBy: { startsAt: "asc" },
     select: {
@@ -66,13 +87,22 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
         action={<ButtonLink href="/organizer/events/new">Create event</ButtonLink>}
       />
 
+      <div className="mb-3">
+        <SearchBox
+          action="/organizer/events"
+          value={q}
+          placeholder="Search by title or venue"
+          hidden={{ status: statusFilter ?? "" }}
+        />
+      </div>
+
       <nav aria-label="Filter by status" className="-mx-1 mb-5 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">
         {FILTERS.map((filter) => {
           const active = (statusFilter ?? "") === filter.value;
           return (
             <Link
               key={filter.label}
-              href={filter.value ? `/organizer/events?status=${filter.value}` : "/organizer/events"}
+              href={buildHref(filter.value)}
               aria-current={active ? "page" : undefined}
               className={cx(
                 "shrink-0 rounded-full border px-3 py-1.5 text-sm transition-all duration-200",

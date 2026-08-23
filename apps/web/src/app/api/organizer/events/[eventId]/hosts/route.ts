@@ -36,6 +36,7 @@ export async function POST(request: Request, { params }: Params) {
         name: input.name,
         title: input.title || null,
         email: input.email,
+        avatarUploadId: input.avatarUploadId || null,
         instagram: input.instagram || null,
         twitter: input.twitter || null,
         linkedin: input.linkedin || null,

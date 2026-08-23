@@ -1,4 +1,5 @@
 import { prisma } from "@ct/db";
+import { revalidateEventById } from "@/lib/event-cache";
 import { audit } from "@/lib/audit";
 import { ok, fail, parseJson, sameOrigin, serverError } from "@/lib/api";
 import { requireManageableEvent, requireOrganizerApi } from "@/lib/organizer-guard";
@@ -67,6 +68,9 @@ export async function POST(request: Request, { params }: Params) {
       action: "TICKET_TYPE_CREATED",
       metadata: { eventId: event.id, name: ticketType.name, pricePaise: ticketType.pricePaise },
     });
+
+    // Prices and seat counts are shown on the detail page.
+    await revalidateEventById(event.id);
 
     return ok({ ticketType }, 201);
   } catch (err) {

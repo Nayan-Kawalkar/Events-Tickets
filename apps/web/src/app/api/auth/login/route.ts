@@ -38,6 +38,20 @@ export async function POST(request: Request) {
       return fail(401, "INVALID_CREDENTIALS", INVALID);
     }
 
+    // A Google-only account has no password to check. Same generic answer as
+    // a wrong password, and the same work done, so the response cannot be used
+    // to discover which accounts use Google.
+    if (!user.passwordHash) {
+      await fakePasswordCheck();
+      await audit({
+        actorUserId: user.id,
+        entityType: "User",
+        entityId: user.id,
+        action: "USER_LOGIN_FAILED",
+        metadata: { reason: "NO_PASSWORD_SET" },
+      });
+      return fail(401, "INVALID_CREDENTIALS", INVALID);
+    }
     if (!(await verifyPassword(password, user.passwordHash))) {
       await audit({
         actorUserId: user.id,

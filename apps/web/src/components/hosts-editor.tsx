@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiRequest } from "@/lib/client-api";
 import { Field, TextInput } from "./form";
+import { HostAvatar } from "./host-avatar";
+import { ImageUpload } from "./image-upload";
 import { Alert, Button, Card } from "./ui";
 import { useToast } from "./toast";
 
@@ -11,6 +13,7 @@ export type HostRow = {
   id: string;
   name: string;
   title: string | null;
+  avatarUploadId: string | null;
   email: string | null;
   instagram: string | null;
   twitter: string | null;
@@ -25,6 +28,8 @@ export function HostsEditor({ eventId, hosts }: { eventId: string; hosts: HostRo
   const [pending, setPending] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  // Uploaded before the host is saved, so it lives outside the form's own data.
+  const [avatar, setAvatar] = useState("");
 
   async function add(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -38,6 +43,7 @@ export function HostsEditor({ eventId, hosts }: { eventId: string; hosts: HostRo
       name: String(data.get("name") ?? ""),
       title: String(data.get("title") ?? ""),
       email: String(data.get("email") ?? ""),
+      avatarUploadId: avatar,
       instagram: String(data.get("instagram") ?? ""),
       twitter: String(data.get("twitter") ?? ""),
       linkedin: String(data.get("linkedin") ?? ""),
@@ -54,6 +60,7 @@ export function HostsEditor({ eventId, hosts }: { eventId: string; hosts: HostRo
 
     toast.push("success", "Host added.");
     form.reset();
+    setAvatar("");
     setAdding(false);
     router.refresh();
   }
@@ -88,7 +95,9 @@ export function HostsEditor({ eventId, hosts }: { eventId: string; hosts: HostRo
           {hosts.map((host) => (
             <li key={host.id}>
               <Card glow={false} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div className="min-w-0">
+                <HostAvatar name={host.name} uploadId={host.avatarUploadId} />
+
+                <div className="min-w-0 flex-1">
                   <p className="font-medium text-slate-900">{host.name}</p>
                   {host.title ? <p className="text-sm text-slate-600">{host.title}</p> : null}
                   <p className="mt-0.5 text-xs text-slate-500">
@@ -136,6 +145,15 @@ export function HostsEditor({ eventId, hosts }: { eventId: string; hosts: HostRo
                 <TextInput id="host-linkedin" name="linkedin" placeholder="Profile URL" error={fields.linkedin} />
               </Field>
             </div>
+
+            <ImageUpload
+              kind="HOST_AVATAR"
+              uploadId={avatar}
+              onUploaded={setAvatar}
+              label="Photo"
+              hint="Optional. A square headshot works best."
+              previewClassName="h-24 w-24 rounded-full"
+            />
 
             <div className="flex gap-2">
               <Button type="submit" disabled={pending}>

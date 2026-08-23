@@ -13,7 +13,11 @@ export const runtime = "nodejs";
  * Payment screenshots do NOT come through here — they are attached to the
  * payment submission itself, so an upload cannot exist without a claim.
  */
-const ALLOWED_KINDS = new Set<string>([UploadKind.EVENT_POSTER, UploadKind.UPI_QR]);
+const ALLOWED_KINDS = new Set<string>([
+  UploadKind.EVENT_POSTER,
+  UploadKind.UPI_QR,
+  UploadKind.HOST_AVATAR,
+]);
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return fail(403, "BAD_ORIGIN", "Request origin not allowed.");
 
@@ -55,7 +59,12 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       entityType: "Upload",
       entityId: stored.uploadId,
-      action: requestedKind === UploadKind.EVENT_POSTER ? "EVENT_POSTER_UPLOADED" : "UPI_QR_UPLOADED",
+      action:
+        requestedKind === UploadKind.EVENT_POSTER
+          ? "EVENT_POSTER_UPLOADED"
+          : requestedKind === UploadKind.HOST_AVATAR
+            ? "HOST_AVATAR_UPLOADED"
+            : "UPI_QR_UPLOADED",
       metadata: { sizeBytes: stored.sizeBytes, mimeType: stored.mimeType },
     });
 

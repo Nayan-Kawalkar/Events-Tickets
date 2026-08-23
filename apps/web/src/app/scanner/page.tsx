@@ -4,6 +4,7 @@ import { ScannerClient } from "@/components/scanner-client";
 import { PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { scannableEventsWhere } from "@/lib/authz";
+import { gateWindowWhere } from "@/lib/event-status";
 
 export const metadata: Metadata = { title: "Gate scanner" };
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function ScannerPage({ searchParams }: Props) {
 
   const events = await prisma.event.findMany({
     where: {
-      status: { in: [EventStatus.PUBLISHED, EventStatus.CLOSED] },
+      ...gateWindowWhere(),
       ...scannableEventsWhere(user),
     },
     orderBy: { startsAt: "asc" },

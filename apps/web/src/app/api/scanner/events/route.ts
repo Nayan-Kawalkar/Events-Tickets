@@ -1,6 +1,7 @@
 import { prisma, EventStatus } from "@ct/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canUseScanner, scannableEventsWhere } from "@/lib/authz";
+import { gateWindowWhere } from "@/lib/event-status";
 import { ok, forbidden, serverError, unauthorized } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -14,7 +15,7 @@ export async function GET() {
   try {
     const events = await prisma.event.findMany({
       where: {
-        status: { in: [EventStatus.PUBLISHED, EventStatus.CLOSED] },
+        ...gateWindowWhere(),
         ...scannableEventsWhere(user),
       },
       orderBy: { startsAt: "asc" },

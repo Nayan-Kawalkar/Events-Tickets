@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { revalidateEventById } from "@/lib/event-cache";
 import { prisma } from "@ct/db";
 import { audit } from "@/lib/audit";
 import { canManageEvent } from "@/lib/authz";
@@ -67,6 +68,9 @@ export async function POST(request: Request, { params }: Params) {
       if (!result.ok) {
         return fail(409, result.reason, VERIFY_MESSAGES[result.reason]);
       }
+
+      // Verification issues the ticket, so the seat count just changed.
+      await revalidateEventById(payment.event.id);
 
       await audit({
         actorUserId: user.id,
