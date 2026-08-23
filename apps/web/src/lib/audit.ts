@@ -36,7 +36,9 @@ export type AuditAction =
   | "SUPER_PASS_ISSUED"
   | "SUPER_PASS_REVOKED"
   | "SCANNER_ASSIGNED"
-  | "SCANNER_REVOKED";
+  | "SCANNER_REVOKED"
+  | "VIP_PASS_ISSUED"
+  | "VIP_PASS_REVOKED";
 
 /**
  * Append an immutable audit record. Never throws — a logging failure must not

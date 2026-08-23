@@ -62,6 +62,12 @@ enum SuperPassStatus {
   EXPIRED
 }
 
+enum VipPassStatus {
+  ACTIVE
+  USED
+  REVOKED
+}
+
 enum TicketStatus {
   ISSUED
   CANCELLED
@@ -93,6 +99,8 @@ model User {
   verifiedPayments ManualPayment[] @relation("ManualPaymentVerifier")
   scannerAssignments ScannerAssignment[] @relation("ScannerUser")
   scannerAssignmentsMade ScannerAssignment[] @relation("ScannerAssigner")
+  vipPassesCreated   VipPass[]     @relation("VipPassCreator")
+  vipPassesScanned   VipPass[]     @relation("VipPassScanner")
   superPassesCreated SuperPass[]   @relation("SuperPassCreator")
   superPassesScanned SuperPass[]   @relation("SuperPassScanner")
 
@@ -140,6 +148,7 @@ model Event {
   hosts           EventHost[]
   scannerAssignments ScannerAssignment[]
   superPassUses   SuperPass[]
+  vipPasses       VipPass[]
 
   @@index([status, startsAt])
   @@index([createdById])
@@ -390,4 +399,34 @@ model ScannerAssignment {
   @@unique([userId, eventId])
   @@index([eventId])
   @@map("scanner_assignments")
+}
+
+/// A guest pass an organizer hands out directly, with no account and no
+/// registration.
+///
+/// Unlike a ticket it belongs to a name rather than a user, and unlike the
+/// admin master pass it only opens the one event it was issued for. Anyone
+/// holding the link can enter, so it is single-use, revocable, and expires with
+/// the event.
+model VipPass {
+  id              String        @id @default(uuid()) @db.Uuid
+  eventId         String        @db.Uuid
+  /// Random and unguessable: it is both the share link and the QR payload body.
+  code            String        @unique
+  guestName       String
+  note            String?
+  status          VipPassStatus @default(ACTIVE)
+  createdByUserId String        @db.Uuid
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+
+  usedAt       DateTime? @db.Timestamptz(6)
+  usedByUserId String?   @db.Uuid
+  usedGateId   String?
+
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("VipPassCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  usedBy    User? @relation("VipPassScanner", fields: [usedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, status])
+  @@map("vip_passes")
 }

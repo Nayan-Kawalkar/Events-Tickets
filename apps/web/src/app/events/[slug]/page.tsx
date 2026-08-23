@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { prisma, EventStatus, ManualPaymentStatus, PaymentMode } from "@ct/db";
+import { prisma, EventStatus, ManualPaymentStatus, PaymentMode, TicketStatus } from "@ct/db";
+import { HostControls } from "@/components/host-controls";
 import {
   AddToCalendar,
   ContactCard,
@@ -11,6 +12,8 @@ import {
 import { Poster } from "@/components/poster";
 import { Alert, ButtonLink, Card, EventStatusBadge, PageHeader } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageEvent } from "@/lib/authz";
+import { effectiveStatus } from "@/lib/event-status";
 import { formatDateTime, formatPrice } from "@/lib/format";
 import { LIVE_TICKET_STATUS_LIST } from "@/lib/ticket-status";
 
@@ -19,9 +22,10 @@ export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
 
 async function loadEvent(slug: string) {
+  // Fetched regardless of status; visibility is decided below, because a host
+  // needs to open their own draft from the same link everyone else uses.
   return prisma.event.findFirst({
-    // Draft and cancelled events must not be reachable by guessing the slug.
-    where: { slug, status: { in: [EventStatus.PUBLISHED, EventStatus.CLOSED, EventStatus.COMPLETED] } },
+    where: { slug },
     select: {
       id: true,
       title: true,
@@ -33,6 +37,8 @@ async function loadEvent(slug: string) {
       registrationClosesAt: true,
       status: true,
       capacity: true,
+      createdById: true,
+      slug: true,
       posterUploadId: true,
       hostOrganization: true,
       addressLine: true,
@@ -87,10 +93,24 @@ export default async function EventDetailPage({ params }: Props) {
   const [event, user] = await Promise.all([loadEvent(slug), getCurrentUser()]);
   if (!event) notFound();
 
+  const isHost = user ? canManageEvent(user, event) : false;
+
+  // Derived, not stored: an event that has just ended must read COMPLETED even
+  // before the write-back on the next listing runs.
+  const status = effectiveStatus(event);
+
+  // A draft or cancelled event is reachable only by whoever hosts it, so an
+  // organizer can open their own event from the same link everyone else uses.
+  const publiclyVisible =
+    status === EventStatus.PUBLISHED ||
+    status === EventStatus.CLOSED ||
+    status === EventStatus.COMPLETED;
+  if (!publiclyVisible && !isHost) notFound();
+
   const now = new Date();
 
   const registrationOpen =
-    event.status === EventStatus.PUBLISHED &&
+    status === EventStatus.PUBLISHED &&
     (!event.registrationOpensAt || event.registrationOpensAt <= now) &&
     (!event.registrationClosesAt || event.registrationClosesAt > now);
 
@@ -131,9 +151,27 @@ export default async function EventDetailPage({ params }: Props) {
     });
   }
 
+  // Numbers only a host sees, fetched only for a host.
+  const hostStats = isHost
+    ? await prisma.$transaction([
+        prisma.ticket.count({
+          where: { eventId: event.id, status: { in: LIVE_TICKET_STATUS_LIST } },
+        }),
+        prisma.ticket.count({ where: { eventId: event.id, status: TicketStatus.CHECKED_IN } }),
+        prisma.manualPayment.count({
+          where: { eventId: event.id, status: ManualPaymentStatus.PENDING },
+        }),
+        prisma.manualPayment.aggregate({
+          where: { eventId: event.id, status: ManualPaymentStatus.VERIFIED },
+          _sum: { amountPaise: true },
+        }),
+      ])
+    : null;
+
   /** Mirrors the server's rules so the UI explains itself. The server decides. */
   const refusalFor = (type: (typeof event.ticketTypes)[number]): string | undefined => {
     if (!registrationOpen) {
+      if (status === EventStatus.COMPLETED) return "Event finished";
       if (event.registrationOpensAt && event.registrationOpensAt > now) return "Opens soon";
       return "Registration closed";
     }
@@ -171,7 +209,7 @@ export default async function EventDetailPage({ params }: Props) {
           />
           <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <EventStatusBadge status={event.status} />
+              <EventStatusBadge status={status} />
               {event.hostOrganization ? (
                 <span className="text-xs font-medium text-brand-300">{event.hostOrganization}</span>
               ) : null}
@@ -181,6 +219,17 @@ export default async function EventDetailPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {isHost && hostStats ? (
+        <HostControls
+          eventId={event.id}
+          status={status}
+          registered={hostStats[0]}
+          checkedIn={hostStats[1]}
+          pendingPayments={hostStats[2]}
+          revenuePaise={hostStats[3]._sum.amountPaise ?? 0}
+        />
+      ) : null}
 
       {/* Already registered: say so, and put the ticket one tap away. */}
       {myTicket ? (

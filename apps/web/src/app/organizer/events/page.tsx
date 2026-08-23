@@ -4,6 +4,7 @@ import { prisma, EventStatus, Role, TicketStatus } from "@ct/db";
 import { EventStatusActions } from "@/components/event-status-actions";
 import { ButtonLink, Card, EmptyState, EventStatusBadge, PageHeader, cx } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
+import { syncCompletedEvents } from "@/lib/event-status";
 import { formatDateTime } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Manage events" };
@@ -14,13 +15,17 @@ const FILTERS = [
   { label: "Draft", value: EventStatus.DRAFT },
   { label: "Published", value: EventStatus.PUBLISHED },
   { label: "Closed", value: EventStatus.CLOSED },
+  { label: "Past", value: EventStatus.COMPLETED },
 ] as const;
 
 type Props = { searchParams: Promise<{ status?: string }> };
 
 export default async function OrganizerEventsPage({ searchParams }: Props) {
-  const user = await requireRole([Role.ORGANIZER, Role.ADMIN], "/organizer/events");
-  const { status } = await searchParams;
+  const [user, { status }] = await Promise.all([
+    requireRole([Role.ORGANIZER, Role.ADMIN], "/organizer/events"),
+    searchParams,
+    syncCompletedEvents(),
+  ]);
 
   const statusFilter =
     status && (Object.values(EventStatus) as string[]).includes(status)
@@ -115,7 +120,7 @@ export default async function OrganizerEventsPage({ searchParams }: Props) {
                 </div>
 
                 <div className="-mx-1 flex gap-2 overflow-x-auto border-t border-white/8 px-1 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">
-                  <ButtonLink href={`/organizer/events/${event.id}`}>Manage</ButtonLink>
+                  <ButtonLink href={`/events/${event.slug}`}>Open event</ButtonLink>
                   <ButtonLink href={`/organizer/events/${event.id}/attendees`} variant="secondary">
                     Guest list
                   </ButtonLink>

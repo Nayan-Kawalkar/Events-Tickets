@@ -4,11 +4,12 @@ import { prisma, Role, TicketStatus } from "@ct/db";
 import { EventForm } from "@/components/event-form";
 import { HostsEditor, type HostRow } from "@/components/hosts-editor";
 import { ScannersEditor, type ScannerRow } from "@/components/scanners-editor";
+import { VipPassesEditor, type VipPassRow } from "@/components/vip-passes-editor";
 import { TicketTypesEditor, type TicketTypeRow } from "@/components/ticket-types-editor";
 import { ButtonLink, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { findManageableEvent } from "@/lib/authz";
-import { toDateTimeLocal } from "@/lib/format";
+import { formatDateTime, toDateTimeLocal } from "@/lib/format";
 import { uuidSchema } from "@/lib/validation";
 
 export const metadata: Metadata = { title: "Edit event" };
@@ -28,7 +29,7 @@ export default async function EditEventPage({ params }: Props) {
   const event = await findManageableEvent(user, idResult.data);
   if (!event) notFound();
 
-  const [ticketTypes, issuedTickets, hosts, scanners] = await Promise.all([
+  const [ticketTypes, issuedTickets, hosts, scanners, vipPasses] = await Promise.all([
     prisma.ticketType.findMany({
       where: { eventId: event.id },
       orderBy: { createdAt: "asc" },
@@ -73,6 +74,11 @@ export default async function EditEventPage({ params }: Props) {
         user: { select: { fullName: true, email: true, role: true } },
         assignedBy: { select: { fullName: true } },
       },
+    }),
+    prisma.vipPass.findMany({
+      where: { eventId: event.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, code: true, guestName: true, note: true, status: true, usedAt: true },
     }),
   ]);
 
@@ -139,6 +145,18 @@ export default async function EditEventPage({ params }: Props) {
         <TicketTypesEditor eventId={event.id} ticketTypes={rows} eventCapacity={event.capacity} />
 
         <HostsEditor eventId={event.id} hosts={hosts as HostRow[]} />
+
+        <VipPassesEditor
+          eventId={event.id}
+          passes={vipPasses.map((p): VipPassRow => ({
+            id: p.id,
+            code: p.code,
+            guestName: p.guestName,
+            note: p.note,
+            status: p.status,
+            usedAt: p.usedAt ? formatDateTime(p.usedAt) : null,
+          }))}
+        />
 
         <ScannersEditor
           eventId={event.id}

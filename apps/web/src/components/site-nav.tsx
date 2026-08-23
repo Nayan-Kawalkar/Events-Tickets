@@ -197,10 +197,14 @@ export function BottomNav({ user }: { user: NavUser }) {
     organizerOnly?: boolean;
     scannerOnly?: boolean;
     guestOnly?: boolean;
+    /** Raised centre action. Only one item may claim it. */
+    center?: boolean;
   }[] = [
     { href: "/", label: "Events", icon: "home" },
     { href: "/tickets", label: "Tickets", icon: "ticket", authOnly: true },
-    { href: "/organizer/events", label: "Manage", icon: "calendar", organizerOnly: true },
+    // Sits in the middle for organizers: creating an event is the thing they
+    // open the app to do.
+    { href: "/organizer/events/new", label: "Create", icon: "plus", organizerOnly: true, center: true },
     { href: "/scanner", label: "Scan", icon: "scan", scannerOnly: true },
     { href: "/profile", label: "Profile", icon: "user", authOnly: true },
     { href: "/help", label: "Help", icon: "help", guestOnly: true },
@@ -223,12 +227,42 @@ export function BottomNav({ user }: { user: NavUser }) {
   return (
     <nav
       aria-label="Bottom"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-white/8 bg-[#041413]/95 backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-white/8 bg-[#041413]/95 pt-2 backdrop-blur-xl md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="mx-auto flex max-w-lg">
         {items.map((item) => {
           const active = isActive(pathname, item.href);
+
+          if (item.center) {
+            return (
+              <li key={item.href} className="flex-1">
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className="flex min-h-[56px] flex-col items-center justify-center gap-1 text-[10px]"
+                >
+                  {/* Raised so the primary action reads as a button, not a tab.
+                      It stays inside the 56px row so nothing overlaps content. */}
+                  <span
+                    aria-hidden="true"
+                    className={cx(
+                      "-mt-4 flex h-12 w-12 items-center justify-center rounded-full shadow-lg ring-4 ring-[#041413] transition-all duration-200",
+                      active
+                        ? "bg-brand-400 text-[#04231c]"
+                        : "bg-brand-500 text-[#04231c] hover:bg-brand-400",
+                    )}
+                  >
+                    <NavIcon name={item.icon} className="h-6 w-6" strokeWidth={2.25} />
+                  </span>
+                  <span className={cx("-mt-1", active ? "font-semibold text-brand-400" : "text-slate-600")}>
+                    {item.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          }
+
           return (
             <li key={item.href} className="flex-1">
               <Link

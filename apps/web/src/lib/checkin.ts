@@ -3,6 +3,7 @@ import { prisma, EventStatus, Role, TicketStatus } from "@ct/db";
 import type { SessionUser } from "./auth";
 import { verifyQrPayload } from "./qr";
 import { consumeSuperPass, isSuperPassPayload } from "./super-pass";
+import { consumeVipPass, isVipPassPayload } from "./vip-pass";
 
 export type RejectReason =
   | "INVALID"
@@ -16,7 +17,9 @@ export type RejectReason =
   | "EVENT_NOT_LIVE"
   | "NOT_AUTHORIZED_FOR_EVENT"
   | "SUPER_PASS_USED"
-  | "SUPER_PASS_REVOKED";
+  | "SUPER_PASS_REVOKED"
+  | "VIP_PASS_USED"
+  | "VIP_PASS_REVOKED";
 
 export type CheckinResult =
   | {
@@ -49,6 +52,8 @@ const REJECT_MESSAGES: Record<RejectReason, string> = {
   NOT_AUTHORIZED_FOR_EVENT: "You are not assigned to this event.",
   SUPER_PASS_USED: "This master pass has already been used. Generate a new one.",
   SUPER_PASS_REVOKED: "This master pass was replaced by a newer one.",
+  VIP_PASS_USED: "This guest pass has already been used.",
+  VIP_PASS_REVOKED: "This guest pass was cancelled by the organizer.",
 };
 
 function reject(reason: RejectReason, extra?: { ticketId?: string; eventId?: string }): CheckinResult {
@@ -62,7 +67,26 @@ function reject(reason: RejectReason, extra?: { ticketId?: string; eventId?: str
  * round-trip to say the same thing. Fifteen seconds is short enough that
  * cancelling an event still reaches the gate almost immediately.
  */
-type CachedEvent = { id: string; status: EventStatus; createdById: string; cachedAt: number };
+type CachedEvent = {
+  id: string;
+  status: EventStatus;
+  createdById: string;
+  endsAt: Date;
+  cachedAt: number;
+};
+
+/**
+ * Is this event still admitting people?
+ *
+ * A finished event stops taking registrations immediately, but the gate keeps
+ * working for the same grace period the QR stays valid — otherwise a queue that
+ * is still moving at the published end time would start rejecting real tickets.
+ */
+function gateIsOpen(event: CachedEvent) {
+  if (event.status === EventStatus.DRAFT || event.status === EventStatus.CANCELLED) return false;
+  const graceMs = Number(process.env.QR_TTL_SECONDS ?? 21600) * 1000;
+  return Date.now() <= event.endsAt.getTime() + graceMs;
+}
 
 /**
  * May this person work this gate?
@@ -90,7 +114,7 @@ async function loadEvent(eventId: string): Promise<CachedEvent | null> {
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: { id: true, status: true, createdById: true },
+    select: { id: true, status: true, createdById: true, endsAt: true },
   });
   if (!event) return null;
 
@@ -132,8 +156,39 @@ export async function validateAndConsume(params: {
     return reject("NOT_AUTHORIZED_FOR_EVENT", { eventId });
   }
 
-  if (event.status !== EventStatus.PUBLISHED && event.status !== EventStatus.CLOSED) {
-    return reject("EVENT_NOT_LIVE", { eventId });
+  if (!gateIsOpen(event)) return reject("EVENT_NOT_LIVE", { eventId });
+
+  // A VIP guest pass: issued by the organizer for this event, no account and no
+  // registration behind it. Same one-time rule as a ticket.
+  if (isVipPassPayload(qrPayload)) {
+    const result = await consumeVipPass({
+      payload: qrPayload,
+      eventId,
+      scannerUserId: scanner.id,
+      gateId,
+    });
+
+    if (!result.ok) {
+      const reason =
+        result.reason === "ALREADY_USED"
+          ? "VIP_PASS_USED"
+          : result.reason === "REVOKED"
+            ? "VIP_PASS_REVOKED"
+            : result.reason;
+      return reject(reason, { eventId });
+    }
+
+    return {
+      status: "APPROVED",
+      message: "Guest pass accepted",
+      attendee: {
+        name: result.pass.guestName,
+        rollNumber: null,
+        ticketType: "VIP guest pass",
+      },
+      checkedInAt: new Date(),
+      eventId,
+    };
   }
 
   // A master pass is admitted here, after the same event and scanner checks a
@@ -252,9 +307,7 @@ export async function manualCheckin(params: {
     return reject("NOT_AUTHORIZED_FOR_EVENT", { eventId });
   }
 
-  if (event.status !== EventStatus.PUBLISHED && event.status !== EventStatus.CLOSED) {
-    return reject("EVENT_NOT_LIVE", { eventId });
-  }
+  if (!gateIsOpen(event)) return reject("EVENT_NOT_LIVE", { eventId });
 
   const now = new Date();
 

@@ -175,6 +175,14 @@
       "namedRegex": "^/api/organizer/events/(?<nxtPeventId>[^/]+?)/ticket\\-types(?:/)?$"
     },
     {
+      "page": "/api/organizer/events/[eventId]/vip-passes",
+      "regex": "^/api/organizer/events/([^/]+?)/vip\\-passes(?:/)?$",
+      "routeKeys": {
+        "nxtPeventId": "nxtPeventId"
+      },
+      "namedRegex": "^/api/organizer/events/(?<nxtPeventId>[^/]+?)/vip\\-passes(?:/)?$"
+    },
+    {
       "page": "/api/organizer/hosts/[hostId]",
       "regex": "^/api/organizer/hosts/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -205,6 +213,14 @@
         "nxtPticketTypeId": "nxtPticketTypeId"
       },
       "namedRegex": "^/api/organizer/ticket\\-types/(?<nxtPticketTypeId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/organizer/vip-passes/[passId]",
+      "regex": "^/api/organizer/vip\\-passes/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpassId": "nxtPpassId"
+      },
+      "namedRegex": "^/api/organizer/vip\\-passes/(?<nxtPpassId>[^/]+?)(?:/)?$"
     },
     {
       "page": "/api/uploads/[uploadId]",
@@ -287,6 +303,14 @@
         "nxtPpublicId": "nxtPpublicId"
       },
       "namedRegex": "^/tickets/(?<nxtPpublicId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/vip/[code]",
+      "regex": "^/vip/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcode": "nxtPcode"
+      },
+      "namedRegex": "^/vip/(?<nxtPcode>[^/]+?)(?:/)?$"
     }
   ],
   "staticRoutes": [

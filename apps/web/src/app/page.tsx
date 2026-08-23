@@ -3,6 +3,7 @@ import { prisma, EventStatus, type TicketStatus } from "@ct/db";
 import { Poster } from "@/components/poster";
 import { ButtonLink, EmptyState, TicketStatusBadge } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
+import { syncCompletedEvents } from "@/lib/event-status";
 import { formatPrice } from "@/lib/format";
 import { LIVE_TICKET_STATUS_LIST } from "@/lib/ticket-status";
 
@@ -26,6 +27,7 @@ type EventRow = {
   venue: string | null;
   startsAt: Date;
   capacity: number | null;
+  createdById: string;
   posterUploadId: string | null;
   _count: { tickets: number };
   ticketTypes: { pricePaise: number }[];
@@ -45,11 +47,13 @@ type BookedRow = {
 };
 
 export default async function HomePage() {
-  const user = await getCurrentUser();
+  // Finished events age into COMPLETED before anything is listed, so an event
+  // never lingers in "upcoming" after it has ended.
+  const [user] = await Promise.all([getCurrentUser(), syncCompletedEvents()]);
 
-  // Only published events are ever exposed publicly.
+  // Only published events are ever exposed publicly, and only ones still ahead.
   const events: EventRow[] = await prisma.event.findMany({
-    where: { status: EventStatus.PUBLISHED },
+    where: { status: EventStatus.PUBLISHED, endsAt: { gte: new Date() } },
     orderBy: { startsAt: "asc" },
     select: {
       id: true,
@@ -59,6 +63,7 @@ export default async function HomePage() {
       venue: true,
       startsAt: true,
       capacity: true,
+      createdById: true,
       posterUploadId: true,
       _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
       ticketTypes: { select: { pricePaise: true } },
@@ -67,6 +72,26 @@ export default async function HomePage() {
 
   // Events this person is already going to. Past events drop off on their own
   // so the section stays a to-do list rather than a history.
+  // Events this person hosts. They belong in "My events" too, with a host mark,
+  // and unlike the public list they include drafts the host has not opened yet.
+  const hosted = user
+    ? await prisma.event.findMany({
+        where: { createdById: user.id, endsAt: { gte: new Date() } },
+        orderBy: { startsAt: "asc" },
+        take: 12,
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          venue: true,
+          startsAt: true,
+          status: true,
+          posterUploadId: true,
+          _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
+        },
+      })
+    : [];
+
   const booked: BookedRow[] = user
     ? await prisma.ticket.findMany({
         where: {
@@ -93,6 +118,22 @@ export default async function HomePage() {
       })
     : [];
 
+  // Anything already finished belongs in its own section, not the main list.
+  const pastEvents = await prisma.event.findMany({
+    where: { status: EventStatus.COMPLETED, endsAt: { lt: new Date() } },
+    orderBy: { endsAt: "desc" },
+    take: 6,
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      venue: true,
+      endsAt: true,
+      posterUploadId: true,
+      _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
+    },
+  });
+
   const [featured, ...rest] = events;
 
   return (
@@ -110,7 +151,7 @@ export default async function HomePage() {
           then everything else. */}
       {events.length > 0 ? <FeaturedEvent event={featured!} /> : null}
 
-      {booked.length > 0 ? (
+      {booked.length > 0 || hosted.length > 0 ? (
         <section aria-labelledby="my-events">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 id="my-events" className="text-display text-slate-900">
@@ -122,6 +163,47 @@ export default async function HomePage() {
           </div>
 
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {hosted.map((event) => (
+              <li key={`host-${event.id}`}>
+                <article className="spotlight card-interactive group relative flex h-full gap-3 overflow-hidden rounded-xl border border-brand-500/30 bg-[#09201e]/90 p-3 shadow-lg shadow-black/40">
+                  <Poster
+                    uploadId={event.posterUploadId}
+                    title={event.title}
+                    ratio="poster"
+                    sizes="80px"
+                    className="w-20 shrink-0"
+                  />
+
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="truncate font-medium text-slate-900">
+                        <Link
+                          href={`/events/${event.slug}`}
+                          className="transition-colors after:absolute after:inset-0 hover:text-brand-300"
+                        >
+                          {event.title}
+                        </Link>
+                      </h3>
+                      <span className="shrink-0 rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-300 ring-1 ring-inset ring-brand-500/40">
+                        Host
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-xs text-slate-600">
+                      {whenFormatter.format(event.startsAt)}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {event.venue ?? "Venue to be announced"}
+                    </p>
+
+                    <p className="mt-auto pt-2 text-xs font-medium text-brand-400">
+                      {event._count.tickets} registered · {event.status.toLowerCase()} · Manage →
+                    </p>
+                  </div>
+                </article>
+              </li>
+            ))}
+
             {booked.map((ticket) => (
               <li key={ticket.publicId}>
                 <article className="spotlight card-interactive group relative flex h-full gap-3 overflow-hidden rounded-xl border border-brand-500/25 bg-[#09201e]/90 p-3 shadow-lg shadow-black/40">
@@ -178,6 +260,53 @@ export default async function HomePage() {
             {rest.map((event) => (
               <li key={event.id}>
                 <EventCard event={event} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {pastEvents.length > 0 ? (
+        <section aria-labelledby="past-events">
+          <h2 id="past-events" className="text-display mb-1 text-slate-900">
+            Past events
+          </h2>
+          <p className="mb-5 text-sm text-slate-600">
+            Finished. Kept here for the record — registration is closed.
+          </p>
+
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {pastEvents.map((event) => (
+              <li key={event.id}>
+                <article className="spotlight group relative flex h-full gap-3 overflow-hidden rounded-xl border border-white/8 bg-[#09201e]/60 p-3">
+                  <Poster
+                    uploadId={event.posterUploadId}
+                    title={event.title}
+                    ratio="poster"
+                    sizes="80px"
+                    className="w-20 shrink-0 opacity-60 grayscale"
+                  />
+
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <h3 className="truncate font-medium text-slate-700">
+                      <Link
+                        href={`/events/${event.slug}`}
+                        className="transition-colors after:absolute after:inset-0 hover:text-brand-300"
+                      >
+                        {event.title}
+                      </Link>
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Ended {whenFormatter.format(event.endsAt)}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {event.venue ?? "Venue not recorded"}
+                    </p>
+                    <p className="mt-auto pt-2 text-xs text-slate-500">
+                      {event._count.tickets} attended
+                    </p>
+                  </div>
+                </article>
               </li>
             ))}
           </ul>
