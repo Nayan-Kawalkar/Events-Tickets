@@ -54,19 +54,23 @@ export default async function HomePage() {
   // never lingers in "upcoming" after it has ended.
   const [user] = await Promise.all([getCurrentUser(), syncCompletedEvents()]);
 
-  // Per-user and deliberately uncached: a stale "your ticket is ready" is
-  // worse than none at all.
-  const updates = await recentUpdates(user);
+  // Everything below depends only on `user`, never on each other, so it all
+  // goes out at once. Awaited one at a time these were five round trips in
+  // series — and against a pooled connection each one also pays its own
+  // checkout, which is what made this page take seconds rather than
+  // milliseconds.
+  const [updates, events, hosted, booked, pastEvents] = await Promise.all([
+    // Per-user and deliberately uncached: a stale "your ticket is ready" is
+    // worse than none at all.
+    recentUpdates(user),
 
-  // Only published events are ever exposed publicly, and only ones still ahead.
-  const events: EventRow[] = await getPublishedEvents();
+    // Only published events are ever exposed publicly, and only ones still ahead.
+    getPublishedEvents() as Promise<EventRow[]>,
 
-  // Events this person is already going to. Past events drop off on their own
-  // so the section stays a to-do list rather than a history.
-  // Events this person hosts. They belong in "My events" too, with a host mark,
-  // and unlike the public list they include drafts the host has not opened yet.
-  const hosted = user
-    ? await prisma.event.findMany({
+    // Events this person hosts. They belong in "My events" too, with a host
+    // mark, and unlike the public list they include drafts not yet opened.
+    user
+      ? prisma.event.findMany({
         where: { createdById: user.id, endsAt: { gte: new Date() } },
         orderBy: { startsAt: "asc" },
         take: 12,
@@ -81,10 +85,12 @@ export default async function HomePage() {
           _count: { select: { tickets: { where: { status: { in: LIVE_TICKET_STATUS_LIST } } } } },
         },
       })
-    : [];
+      : [],
 
-  const booked: BookedRow[] = user
-    ? await prisma.ticket.findMany({
+    // Events this person is already going to. Past events drop off on their
+    // own so the section stays a to-do list rather than a history.
+    user
+      ? prisma.ticket.findMany({
         where: {
           ownerUserId: user.id,
           status: { in: LIVE_TICKET_STATUS_LIST },
@@ -107,10 +113,11 @@ export default async function HomePage() {
           },
         },
       })
-    : [];
+      : [],
 
-  // Anything already finished belongs in its own section, not the main list.
-  const pastEvents = await getPastEvents();
+    // Anything already finished belongs in its own section, not the main list.
+    getPastEvents(),
+  ]);
 
   const [featured, ...rest] = events;
 

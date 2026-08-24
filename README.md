@@ -232,6 +232,41 @@ Seeded with the password in `SEED_PASSWORD` (default `Password123!`):
 
 The seed script refuses to run when `NODE_ENV=production`.
 
+## Performance notes
+
+Every page render costs database round trips, and the round trip is the unit
+that matters — not the query. Against Supabase's transaction pooler, Prisma
+wraps each connection checkout in `BEGIN` / `DEALLOCATE ALL` / … / `COMMIT`, so
+**one query costs four round trips**. Pool size does not change this:
+`connection_limit=1` and `connection_limit=5` measure identically.
+
+Two consequences:
+
+1. **Never await independent queries in series.** The home page went from
+   4168ms to 1662ms purely by moving five sequential awaits into one
+   `Promise.all`. Nothing else about it changed.
+
+2. **Database region dominates everything else.** Measure the round trip
+   before optimising code:
+
+   ```bash
+   node -e "require('node:process').loadEnvFile('.env');const{Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});await c.connect();const t=Date.now();await c.query('select 1');console.log(Date.now()-t+'ms');await c.end()})()"
+   ```
+
+   A pooler on another continent costs ~176ms per trip, which puts a floor of
+   roughly 700ms under any single-query page however the code is written.
+   Hosting the database in the region the users are in is worth more than any
+   change in this repo.
+
+To see what a page actually runs:
+
+```bash
+PRISMA_LOG_QUERIES=1 npm run start
+```
+
+Counting the `BEGIN`/`COMMIT` lines against the `SELECT`s shows how much of a
+page is overhead rather than work.
+
 ## Scripts
 
 | Command | Purpose |

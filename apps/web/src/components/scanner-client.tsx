@@ -26,6 +26,15 @@ const RESET_MS = 1400;
  */
 const DUPLICATE_COOLDOWN_MS = 6000;
 
+/**
+ * How long one check-in request may take before it is abandoned.
+ *
+ * Generous next to a healthy check (well under a second) but short enough that
+ * a stalled request becomes a retry the volunteer can act on rather than a
+ * scanner that appears to have died.
+ */
+const SCAN_TIMEOUT_MS = 6000;
+
 export function ScannerClient({
   events,
   initialEventId,
@@ -77,12 +86,20 @@ export function ScannerClient({
    * because either they are trying it twice or someone came in on their ticket.
    * Those sounding identical is what made the distinction easy to miss.
    */
-  const signal = useCallback((kind: "approved" | "duplicate" | "rejected") => {
+  const signal = useCallback((kind: "approved" | "duplicate" | "rejected" | "unknown") => {
     if (typeof navigator !== "undefined" && navigator.vibrate) {
       // Approved is one pulse, duplicate a quick double, rejection a long
       // stutter — recognisable in a pocket as well as through the speaker.
+      // "Unknown" is the shortest of all: nothing was decided, so it must not
+      // feel like a verdict.
       navigator.vibrate(
-        kind === "approved" ? 80 : kind === "duplicate" ? [40, 60, 40] : [90, 70, 90],
+        kind === "approved"
+          ? 80
+          : kind === "unknown"
+            ? 30
+            : kind === "duplicate"
+              ? [40, 60, 40]
+              : [90, 70, 90],
       );
     }
     try {
@@ -107,6 +124,10 @@ export function ScannerClient({
       let last: OscillatorNode;
       if (kind === "approved") {
         last = tone(880, 0, 0.12);
+      } else if (kind === "unknown") {
+        // Quiet and short, clearly not the refusal buzz: this is "ask them to
+        // hold it up again", not "turn them away".
+        last = tone(660, 0, 0.07);
       } else if (kind === "duplicate") {
         // Two mid pips: neither the high single note of a pass nor the low
         // buzz of a refusal, so it cannot be mistaken for either.
@@ -139,6 +160,11 @@ export function ScannerClient({
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ eventId, gateId, qrPayload: payload }),
           keepalive: true,
+          // A gate cannot wait on a socket that will never answer. Without a
+          // deadline a stalled request hangs the scanner indefinitely and the
+          // queue stops entirely; failing fast turns that into "try again",
+          // which a volunteer can act on.
+          signal: AbortSignal.timeout(SCAN_TIMEOUT_MS),
         });
 
       let result: Outcome;
@@ -169,7 +195,15 @@ export function ScannerClient({
           result.reason === "VIP_PASS_USED" ||
           result.reason === "SUPER_PASS_USED");
 
-      signal(approved ? "approved" : alreadyUsed ? "duplicate" : "rejected");
+      // The request never landed, so the ticket was never judged. Forget the
+      // code immediately: the attendee is still holding it up, and the whole
+      // point is that presenting it again retries straight away instead of
+      // being swallowed by the duplicate cooldown.
+      if (result.status === "ERROR") lastCodeRef.current = null;
+
+      signal(
+        approved ? "approved" : result.status === "ERROR" ? "unknown" : alreadyUsed ? "duplicate" : "rejected",
+      );
 
       setRecent((prev) =>
         [
@@ -227,9 +261,12 @@ export function ScannerClient({
       // QR-only reader: the multi-format one also tries Data Matrix, PDF417 and
       // every 1D barcode on every frame, which is wasted work at a gate and
       // makes each read noticeably slower.
+      // 100ms between attempts is only ten looks per second, and a phone screen
+      // held at arm's length is in focus for a fraction of that. Halving it
+      // roughly doubles the chances of catching a good frame.
       const reader = new BrowserQRCodeReader(undefined, {
-        delayBetweenScanAttempts: 100,
-        delayBetweenScanSuccess: 100,
+        delayBetweenScanAttempts: 50,
+        delayBetweenScanSuccess: 50,
       });
 
       const controls = await reader.decodeFromConstraints(
@@ -368,9 +405,25 @@ export function ScannerClient({
             playsInline
             aria-label="Camera preview"
           />
-          {!scanning ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/85 p-6 text-center text-sm text-slate-700">
-              {busy ? "Checking…" : "Camera is off"}
+          {/* Shown while a scan is in flight *even with the camera running*.
+              Without this the volunteer sees a live picture and nothing else
+              for the second or two the check takes, assumes the code was never
+              read, and starts waving the phone about — which is the surest way
+              to lose the frame that would have worked. */}
+          {busy || !scanning ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 p-6 text-center">
+              {busy ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="h-8 w-8 animate-spin rounded-full border-2 border-white/25 border-t-brand-400"
+                  />
+                  <span className="text-base font-medium text-white">Checking…</span>
+                  <span className="text-xs text-white/60">Hold the code still</span>
+                </>
+              ) : (
+                <span className="text-sm text-slate-700">Camera is off</span>
+              )}
             </div>
           ) : null}
         </div>
@@ -462,20 +515,31 @@ export function ScannerClient({
 function ResultPanel({ outcome, onDismiss }: { outcome: Outcome; onDismiss: () => void }) {
   const approved = outcome.status === "APPROVED";
 
+  /**
+   * A failed request is not a refusal.
+   *
+   * This used to render red "REJECTED" whenever the status was not APPROVED,
+   * which meant a dropped request on venue wi-fi accused a valid attendee of
+   * having a bad ticket — and the volunteer only found out it was fine after
+   * trying three or four times. Amber says "we do not know yet, try again",
+   * which is the truth.
+   */
+  const unknown = outcome.status === "ERROR";
+
   return (
     <div
       role="alert"
       className={cx(
         "rounded-2xl p-6 text-center text-white shadow-lg",
-        approved ? "bg-emerald-600" : "bg-red-600",
+        approved ? "bg-emerald-600" : unknown ? "bg-amber-600" : "bg-red-600",
       )}
     >
       {/* Symbol as well as colour: never rely on colour alone. */}
       <p className="text-6xl leading-none" aria-hidden="true">
-        {approved ? "✓" : "✕"}
+        {approved ? "✓" : unknown ? "↻" : "✕"}
       </p>
       <p className="mt-3 text-3xl font-bold tracking-tight">
-        {approved ? "APPROVED" : "REJECTED"}
+        {approved ? "APPROVED" : unknown ? "TRY AGAIN" : "REJECTED"}
       </p>
 
       {outcome.status === "APPROVED" ? (
