@@ -9,7 +9,13 @@ type ScannerEvent = { id: string; title: string; startsAt: string; venue: string
 
 type Outcome =
   | { status: "APPROVED"; message: string; attendee: { name: string; rollNumber: string | null; ticketType: string }; checkedInAt: string }
-  | { status: "REJECTED"; reason: string; message: string }
+  | {
+      status: "REJECTED";
+      reason: string;
+      message: string;
+      /** WRONG_EVENT only: the event this ticket really belongs to. */
+      ticketEvent?: { id: string; title: string };
+    }
   | { status: "ERROR"; message: string };
 
 type RecentScan = { at: number; label: string; approved: boolean };
@@ -54,6 +60,20 @@ export function ScannerClient({
   const [recent, setRecent] = useState<RecentScan[]>([]);
   const [manualCode, setManualCode] = useState("");
   const [online, setOnline] = useState(true);
+  // Torch is only offered when the device actually reports the capability;
+  // calling applyConstraints for it elsewhere throws.
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  /**
+   * getUserMedia is unavailable outside a secure context, so on plain http the
+   * camera can never start. Detected up front rather than letting a volunteer
+   * discover it as a permission failure with a queue already forming.
+   */
+  const [insecure, setInsecure] = useState(false);
+
+  useEffect(() => {
+    setInsecure(typeof window !== "undefined" && !window.isSecureContext);
+  }, []);
 
   // The ZXing callback is created once and closes over the values of that
   // render, so `busy`/`outcome` state is stale inside it. These refs are read
@@ -64,6 +84,9 @@ export function ScannerClient({
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const lastCodeRef = useRef<{ code: string; at: number } | null>(null);
+  // Kept so "switch event and check in" can resubmit the code already read,
+  // rather than asking the attendee to present the ticket a second time.
+  const lastPayloadRef = useRef<string | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -145,8 +168,13 @@ export function ScannerClient({
   }, []);
 
   const submit = useCallback(
-    async (payload: string) => {
-      if (!eventId || processingRef.current) return;
+    // `forEventId` overrides the selected event for one submission. Needed
+    // because switching events and resubmitting happens in the same tick, and
+    // the state update is not visible yet.
+    async (payload: string, forEventId?: string) => {
+      const targetEventId = forEventId ?? eventId;
+      if (!targetEventId || processingRef.current) return;
+      lastPayloadRef.current = payload;
       processingRef.current = true;
       setBusy(true);
 
@@ -158,7 +186,7 @@ export function ScannerClient({
         fetch("/api/checkin/validate", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ eventId, gateId, qrPayload: payload }),
+          body: JSON.stringify({ eventId: targetEventId, gateId, qrPayload: payload }),
           keepalive: true,
           // A gate cannot wait on a socket that will never answer. Without a
           // deadline a stalled request hangs the scanner indefinitely and the
@@ -238,6 +266,30 @@ export function ScannerClient({
     [eventId, gateId, signal],
   );
 
+  /**
+   * Point the scanner at the ticket's own event and check it in immediately.
+   *
+   * A gate left on the wrong event refuses every valid ticket in the queue, and
+   * the only clue is a line of text asking the volunteer to go and change a
+   * dropdown. This turns that into one tap, reusing the code already decoded so
+   * nobody has to present their ticket twice.
+   */
+  const switchEventAndRetry = useCallback(
+    (targetEventId: string) => {
+      const payload = lastPayloadRef.current;
+      setEventId(targetEventId);
+
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      setOutcome(null);
+      resultShownRef.current = false;
+      // The same code is about to be resubmitted on purpose, so the duplicate
+      // guard must not swallow it.
+      lastCodeRef.current = null;
+      if (payload) void submit(payload, targetEventId);
+    },
+    [submit],
+  );
+
   /** Manual dismiss shares the reset path so the guards cannot get stuck on. */
   const clearResult = useCallback(() => {
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
@@ -250,7 +302,24 @@ export function ScannerClient({
     controlsRef.current = null;
     processingRef.current = false;
     setScanning(false);
+    setTorchAvailable(false);
+    setTorchOn(false);
   }, []);
+
+  /** Toggle the camera light. Never fatal: a refusal just leaves it off. */
+  const toggleTorch = useCallback(async () => {
+    const track = (videoRef.current?.srcObject as MediaStream | null)?.getVideoTracks()[0];
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      // `torch` is real on Android Chrome but absent from the DOM typings, so
+      // the cast goes through `unknown` rather than pretending it is standard.
+      await track.applyConstraints({ advanced: [{ torch: next }] } as unknown as MediaTrackConstraints);
+      setTorchOn(next);
+    } catch {
+      setTorchAvailable(false);
+    }
+  }, [torchOn]);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
@@ -305,6 +374,14 @@ export function ScannerClient({
       );
       controlsRef.current = controls;
       setScanning(true);
+
+      // A phone screen under dim hall lighting is the single most common reason
+      // a valid code will not read. The torch fixes it, and it is not something
+      // a volunteer can reach once the camera owns the stream.
+      const track = (videoRef.current?.srcObject as MediaStream | null)?.getVideoTracks()[0];
+      const capabilities = track?.getCapabilities?.() as { torch?: boolean } | undefined;
+      setTorchAvailable(Boolean(capabilities?.torch));
+      setTorchOn(false);
     } catch (err) {
       setCameraError(
         err instanceof Error && err.name === "NotAllowedError"
@@ -335,6 +412,17 @@ export function ScannerClient({
 
   return (
     <div className="space-y-4">
+      {insecure ? (
+        <div role="alert" className="rounded-lg border border-red-400/40 bg-red-500/15 px-4 py-3 text-sm text-red-200">
+          <p className="font-semibold">The camera cannot start on this address.</p>
+          <p className="mt-1">
+            Browsers only allow camera access over HTTPS (or on localhost). Open this page on an
+            <strong> https:// </strong>
+            address, or use manual entry below — it works without a camera.
+          </p>
+        </div>
+      ) : null}
+
       {!online ? (
         <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-medium text-amber-200">
           No network connection. Check-ins cannot be validated until it returns.
@@ -394,7 +482,21 @@ export function ScannerClient({
       {/* The result is an overlay, never a replacement: unmounting the <video>
           would break the decode session while it kept reading the old stream,
           which produced a burst of repeat results from a single QR. */}
-      {outcome ? <ResultPanel outcome={outcome} onDismiss={clearResult} /> : null}
+      {outcome ? (
+        <ResultPanel
+          outcome={outcome}
+          onDismiss={clearResult}
+          // Offered only for an event already in this scanner's own list, so
+          // the shortcut can never grant access to an event they cannot work.
+          onSwitchEvent={
+            outcome.status === "REJECTED" &&
+            outcome.ticketEvent &&
+            events.some((e) => e.id === outcome.ticketEvent!.id)
+              ? switchEventAndRetry
+              : undefined
+          }
+        />
+      ) : null}
 
       <Card className={cx("space-y-3", outcome && "hidden")}>
         <div className="relative overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
@@ -438,6 +540,17 @@ export function ScannerClient({
               Start camera
             </Button>
           )}
+
+          {torchAvailable ? (
+            <Button
+              variant="secondary"
+              onClick={() => void toggleTorch()}
+              aria-pressed={torchOn}
+              className="shrink-0"
+            >
+              {torchOn ? "Light off" : "Light on"}
+            </Button>
+          ) : null}
         </div>
 
         {cameraError ? (
@@ -512,7 +625,16 @@ export function ScannerClient({
   );
 }
 
-function ResultPanel({ outcome, onDismiss }: { outcome: Outcome; onDismiss: () => void }) {
+function ResultPanel({
+  outcome,
+  onDismiss,
+  onSwitchEvent,
+}: {
+  outcome: Outcome;
+  onDismiss: () => void;
+  /** Absent when the ticket's event is not one this scanner may work. */
+  onSwitchEvent?: (eventId: string) => void;
+}) {
   const approved = outcome.status === "APPROVED";
 
   /**
@@ -554,10 +676,23 @@ function ResultPanel({ outcome, onDismiss }: { outcome: Outcome; onDismiss: () =
         <p className="mt-3 text-lg font-medium">{outcome.message}</p>
       )}
 
+      {/* The gate is on the wrong event and every valid ticket in the queue is
+          being refused. One tap fixes it and admits this person, instead of
+          sending the volunteer off to find a dropdown. */}
+      {onSwitchEvent && outcome.status === "REJECTED" && outcome.ticketEvent ? (
+        <button
+          type="button"
+          onClick={() => onSwitchEvent(outcome.ticketEvent!.id)}
+          className="mt-5 min-h-12 w-full rounded-lg bg-white px-4 text-sm font-bold text-slate-900 hover:bg-white/90"
+        >
+          Switch to {outcome.ticketEvent.title} &amp; check in
+        </button>
+      ) : null}
+
       <button
         type="button"
         onClick={onDismiss}
-        className="mt-5 min-h-11 w-full rounded-lg bg-white/15 px-4 text-sm font-semibold hover:bg-white/25"
+        className="mt-3 min-h-11 w-full rounded-lg bg-white/15 px-4 text-sm font-semibold hover:bg-white/25"
       >
         Next scan
       </button>

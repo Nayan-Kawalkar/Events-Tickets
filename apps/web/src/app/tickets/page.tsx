@@ -13,6 +13,7 @@ export default async function MyTicketsPage() {
   const user = await requireUser("/tickets");
 
   const tickets = await prisma.ticket.findMany({
+      relationLoadStrategy: "join",
     // Scoped to the session's own user — never a value from the URL.
     where: { ownerUserId: user.id },
     orderBy: [{ event: { startsAt: "asc" } }, { issuedAt: "desc" }],

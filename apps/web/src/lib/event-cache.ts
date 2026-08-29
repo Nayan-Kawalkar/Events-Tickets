@@ -196,6 +196,7 @@ const detailSelect = {
       salesStartAt: true,
       salesEndAt: true,
       requiresStudentId: true,
+      requiresApproval: true,
       transferable: true,
       maxPerUser: true,
       paymentMode: true,

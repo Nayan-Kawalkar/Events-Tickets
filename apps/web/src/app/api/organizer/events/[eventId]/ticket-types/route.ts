@@ -52,6 +52,7 @@ export async function POST(request: Request, { params }: Params) {
         salesStartAt: input.salesStartAt,
         salesEndAt: input.salesEndAt,
         requiresStudentId: input.requiresStudentId,
+        requiresApproval: input.requiresApproval,
         transferable: input.transferable,
         maxPerUser: input.maxPerUser,
         paymentMode: input.paymentMode,

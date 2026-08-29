@@ -9,6 +9,8 @@ import { useToast } from "./toast";
 export type PendingPayment = {
   id: string;
   amountLabel: string;
+  /** Free seat awaiting the organizer, rather than a payment to check. */
+  freeApproval: boolean;
   ticketTypeName: string;
   submittedAt: string;
   upiTransactionId: string | null;
@@ -120,12 +122,15 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
           <Button
             disabled={pending}
             onClick={() => {
-              if (confirm("Have you confirmed this payment in your UPI or bank app?")) {
+              const question = payment.freeApproval
+                ? `Approve ${payment.payer.name} and issue their ticket?`
+                : "Have you confirmed this payment in your UPI or bank app?";
+              if (confirm(question)) {
                 void act({ action: "VERIFY" });
               }
             }}
           >
-            Verify &amp; issue ticket
+            {payment.freeApproval ? "Approve & issue ticket" : "Verify & issue ticket"}
           </Button>
           <Button variant="danger" disabled={pending} onClick={() => setRejecting(true)}>
             Reject

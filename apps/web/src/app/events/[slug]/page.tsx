@@ -64,7 +64,10 @@ export default async function EventDetailPage({ params }: Props) {
   const pendingPayment = new Set<string>();
   let myTicket: { publicId: string } | null = null;
   if (user) {
-    const [held, claims] = await Promise.all([
+    // All three need only user.id and event.id, so they go out together. Run
+    // in series they cost three round-trip waves instead of one, which on a
+    // pooled connection is most of what made opening an event feel slow.
+    const [held, claims, myTicketRow] = await Promise.all([
       prisma.ticket.groupBy({
         by: ["ticketTypeId"],
         where: {
@@ -78,19 +81,19 @@ export default async function EventDetailPage({ params }: Props) {
         where: { userId: user.id, eventId: event.id, status: ManualPaymentStatus.PENDING },
         select: { ticketTypeId: true },
       }),
+      prisma.ticket.findFirst({
+        where: {
+          ownerUserId: user.id,
+          eventId: event.id,
+          status: { in: LIVE_TICKET_STATUS_LIST },
+        },
+        orderBy: { issuedAt: "desc" },
+        select: { publicId: true },
+      }),
     ]);
     for (const row of held) heldByType.set(row.ticketTypeId, row._count._all);
     for (const claim of claims) pendingPayment.add(claim.ticketTypeId);
-
-    myTicket = await prisma.ticket.findFirst({
-      where: {
-        ownerUserId: user.id,
-        eventId: event.id,
-        status: { in: LIVE_TICKET_STATUS_LIST },
-      },
-      orderBy: { issuedAt: "desc" },
-      select: { publicId: true },
-    });
+    myTicket = myTicketRow;
   }
 
   // Numbers only a host sees, fetched only for a host.
@@ -119,7 +122,10 @@ export default async function EventDetailPage({ params }: Props) {
     }
     if (type.salesStartAt && type.salesStartAt > now) return "Not on sale yet";
     if (type.salesEndAt && type.salesEndAt <= now) return "Sales closed";
-    if (pendingPayment.has(type.id)) return "Payment awaiting verification";
+    if (pendingPayment.has(type.id)) {
+      // Nothing was paid for a free seat, so calling it a payment is confusing.
+      return type.pricePaise === 0 ? "Waiting for approval" : "Payment awaiting verification";
+    }
     if (type.pricePaise > 0 && type.paymentMode !== PaymentMode.MANUAL_UPI) {
       return "Paid tickets coming soon";
     }
@@ -238,7 +244,19 @@ export default async function EventDetailPage({ params }: Props) {
                             {formatPrice(type.pricePaise)}
                           </p>
                           {user ? (
-                            type.paymentMode === PaymentMode.MANUAL_UPI ? (
+                            // A free seat the organizer vets goes through the
+                            // same request-and-wait flow as a UPI payment.
+                            type.pricePaise === 0 && type.requiresApproval ? (
+                              refusalFor(type) ? (
+                                <p className="text-sm font-medium text-slate-500" role="status">
+                                  {refusalFor(type)}
+                                </p>
+                              ) : (
+                                <ButtonLink href={`/events/${slug}/pay/${type.id}`}>
+                                  Request a seat
+                                </ButtonLink>
+                              )
+                            ) : type.paymentMode === PaymentMode.MANUAL_UPI ? (
                               refusalFor(type) ? (
                                 <p className="text-sm font-medium text-slate-500" role="status">
                                   {refusalFor(type)}

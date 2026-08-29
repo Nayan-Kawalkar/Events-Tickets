@@ -88,7 +88,13 @@ export async function submitManualPayment(params: {
       if (!ticketType || ticketType.eventId !== event.id) {
         return { ok: false, reason: "TICKET_TYPE_NOT_FOUND" };
       }
-      if (ticketType.paymentMode !== PaymentMode.MANUAL_UPI) {
+      // Two ways to land in the pending queue: a UPI payment to verify, or a
+      // free seat an organizer approves by hand. Anything else issues a ticket
+      // outright and must never reach here.
+      const needsReview =
+        ticketType.paymentMode === PaymentMode.MANUAL_UPI ||
+        (ticketType.pricePaise === 0 && ticketType.requiresApproval);
+      if (!needsReview) {
         return { ok: false, reason: "NOT_MANUAL_UPI" };
       }
       if (ticketType.salesStartAt && ticketType.salesStartAt > now) {

@@ -158,6 +158,7 @@ const ticketTypeFields = {
   salesStartAt: optionalDateTime,
   salesEndAt: optionalDateTime,
   requiresStudentId: z.coerce.boolean(),
+  requiresApproval: z.coerce.boolean().optional().default(false),
   phoneMode: z.nativeEnum(FieldMode).optional(),
   rollNumberMode: z.nativeEnum(FieldMode).optional(),
   departmentMode: z.nativeEnum(FieldMode).optional(),

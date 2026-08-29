@@ -4,6 +4,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Lets a query load its relations in one SQL JOIN instead of firing a
+  // follow-up query per relation. Against a pooled connection each of those
+  // follow-ups costs its own checkout, so the saving is round trips, not SQL.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -188,6 +192,10 @@ model TicketType {
   capacity          Int?
   salesStartAt      DateTime? @db.Timestamptz(6)
   salesEndAt        DateTime? @db.Timestamptz(6)
+  /// Free seats an organizer must approve one at a time, for events open only
+  /// to their own students. Paid types are already gated by payment
+  /// verification, so this applies to free ones.
+  requiresApproval  Boolean   @default(false)
   requiresStudentId Boolean   @default(true)
 
   /// Which built-in attendee fields this ticket asks for. Name and email are

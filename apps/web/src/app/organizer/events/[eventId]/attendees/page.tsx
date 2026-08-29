@@ -51,6 +51,7 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
   // Unfiltered total, so the count line can say what the filter is hiding.
   const [tickets, totalTickets] = await Promise.all([
     prisma.ticket.findMany({
+      relationLoadStrategy: "join",
     where: {
       eventId: event.id,
       ...(status ? { status } : {}),

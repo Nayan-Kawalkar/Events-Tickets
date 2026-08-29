@@ -18,6 +18,7 @@ export type TicketTypeRow = {
   salesStartAt: string | null;
   salesEndAt: string | null;
   requiresStudentId: boolean;
+  requiresApproval: boolean;
   transferable: boolean;
   maxPerUser: number;
   paymentMode: PaymentMode;
@@ -35,6 +36,7 @@ type Draft = {
   salesStartAt: string;
   salesEndAt: string;
   requiresStudentId: boolean;
+  requiresApproval: boolean;
   transferable: boolean;
   maxPerUser: string;
   paymentMode: PaymentMode;
@@ -51,6 +53,7 @@ const emptyDraft: Draft = {
   salesStartAt: "",
   salesEndAt: "",
   requiresStudentId: true,
+  requiresApproval: false,
   transferable: false,
   maxPerUser: "1",
   paymentMode: PaymentMode.AUTOMATIC,
@@ -68,6 +71,7 @@ function toDraft(row: TicketTypeRow): Draft {
     salesStartAt: row.salesStartAt ?? "",
     salesEndAt: row.salesEndAt ?? "",
     requiresStudentId: row.requiresStudentId,
+    requiresApproval: row.requiresApproval,
     transferable: row.transferable,
     maxPerUser: String(row.maxPerUser),
     paymentMode: row.paymentMode,
@@ -87,6 +91,7 @@ function draftToPayload(draft: Draft) {
     salesStartAt: draft.salesStartAt,
     salesEndAt: draft.salesEndAt,
     requiresStudentId: draft.requiresStudentId,
+    requiresApproval: draft.requiresApproval,
     transferable: draft.transferable,
     maxPerUser: draft.maxPerUser,
     paymentMode: draft.paymentMode,
@@ -431,6 +436,16 @@ function TicketTypeForm({
             disabled={lockedFields}
             onChange={(e) => set("requiresStudentId", e.target.checked)}
           />
+          {/* Paid types are already gated by payment verification, so this
+              would be a second queue for the same decision. */}
+          {Number(draft.priceRupees || "0") === 0 ? (
+            <Checkbox
+              label="Approve each request by hand"
+              hint="Free seats go to a queue for you to accept or decline, instead of being issued instantly. Use this when the event is only for your own students."
+              checked={draft.requiresApproval}
+              onChange={(e) => set("requiresApproval", e.target.checked)}
+            />
+          ) : null}
           <Checkbox
             label="Transferable"
             hint="Allows an official transfer to another verified account."

@@ -95,7 +95,10 @@ export default async function PaymentsPage({ params, searchParams }: Props) {
 
   const queue: PendingPayment[] = pending.map((payment) => ({
     id: payment.id,
-    amountLabel: formatPrice(payment.amountPaise),
+    amountLabel: payment.amountPaise === 0 ? "Free" : formatPrice(payment.amountPaise),
+    // Nothing was paid, so this is a person to vet rather than a transfer
+    // to check against a bank statement.
+    freeApproval: payment.amountPaise === 0,
     ticketTypeName: payment.ticketType.name,
     submittedAt: formatDateTime(payment.createdAt),
     upiTransactionId: payment.upiTransactionId,

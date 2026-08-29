@@ -24,6 +24,7 @@ export type RejectionReason =
   | "SALES_NOT_OPEN"
   | "SALES_CLOSED"
   | "PAID_NOT_SUPPORTED"
+  | "NEEDS_APPROVAL"
   | "STUDENT_ID_REQUIRED"
   | "MAX_PER_USER_REACHED"
   | "TICKET_TYPE_SOLD_OUT"
@@ -39,6 +40,8 @@ export const REJECTION_MESSAGES: Record<RejectionReason, string> = {
   SALES_NOT_OPEN: "This ticket type is not on sale yet.",
   SALES_CLOSED: "Sales for this ticket type have closed.",
   PAID_NOT_SUPPORTED: "Paid tickets are not available yet. Please check back later.",
+  NEEDS_APPROVAL:
+    "This ticket needs the organizer's approval. Use the request form on the event page.",
   STUDENT_ID_REQUIRED: "Add your roll number to your profile before registering for this ticket.",
   MAX_PER_USER_REACHED: "You already hold the maximum number of tickets for this ticket type.",
   TICKET_TYPE_SOLD_OUT: "This ticket type is sold out.",
@@ -108,6 +111,11 @@ async function attemptRegistration(
       // Paid tickets must go through a verified payment before a ticket exists.
       // Until that phase lands, refuse rather than issue something for free.
       if (ticketType.pricePaise > 0) return { ok: false, reason: "PAID_NOT_SUPPORTED" };
+
+      // Free, but the organizer vets each person. Issuing straight away here
+      // would defeat the whole point, so the request goes to the review queue
+      // instead — the same one paid claims use.
+      if (ticketType.requiresApproval) return { ok: false, reason: "NEEDS_APPROVAL" };
 
       // The form is whatever this ticket type asks for. Validated here, on the
       // server, against the same description the browser rendered from — a

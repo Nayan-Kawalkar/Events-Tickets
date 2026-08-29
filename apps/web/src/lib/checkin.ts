@@ -37,6 +37,12 @@ export type CheckinResult =
       message: string;
       ticketId?: string;
       eventId?: string;
+      /**
+       * For WRONG_EVENT: the event the ticket actually belongs to, so the
+       * scanner can offer to switch instead of making someone read a
+       * message and hunt through a dropdown with a queue waiting.
+       */
+      ticketEvent?: { id: string; title: string };
     };
 
 const REJECT_MESSAGES: Record<RejectReason, string> = {
@@ -354,10 +360,24 @@ export async function manualCheckin(params: {
 
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
-    select: { id: true, eventId: true, status: true },
+    select: {
+      id: true,
+      eventId: true,
+      status: true,
+      event: { select: { id: true, title: true } },
+    },
   });
   if (!ticket) return reject("NOT_FOUND", { eventId });
-  if (ticket.eventId !== eventId) return reject("WRONG_EVENT", { ticketId: ticket.id, eventId });
+  if (ticket.eventId !== eventId) {
+    return {
+      status: "REJECTED" as const,
+      reason: "WRONG_EVENT" as const,
+      message: `This ticket is for "${ticket.event.title}".`,
+      ticketId: ticket.id,
+      eventId,
+      ticketEvent: { id: ticket.event.id, title: ticket.event.title },
+    };
+  }
 
   switch (ticket.status) {
     case TicketStatus.CHECKED_IN:
@@ -399,8 +419,12 @@ async function diagnose(
 
     return mayKnow
       ? {
-          ...rejection,
-          message: `This ticket is for "${ticket.event.title}". Switch the scanner to that event.`,
+          status: "REJECTED" as const,
+          reason: "WRONG_EVENT" as const,
+          message: `This ticket is for "${ticket.event.title}".`,
+          ticketId: ticket.id,
+          eventId,
+          ticketEvent: { id: ticket.eventId, title: ticket.event.title },
         }
       : rejection;
   }

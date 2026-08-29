@@ -7,7 +7,8 @@ import { ScannersEditor, type ScannerRow } from "@/components/scanners-editor";
 import { VipPassesEditor, type VipPassRow } from "@/components/vip-passes-editor";
 import { TicketTypesEditor, type TicketTypeRow } from "@/components/ticket-types-editor";
 import { RegistrationFormEditor } from "@/components/registration-form-editor";
-import { ButtonLink, PageHeader } from "@/components/ui";
+import { FilterChips } from "@/components/list-controls";
+import { ButtonLink, EmptyState, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { findManageableEvent } from "@/lib/authz";
 import { formatDateTime, toDateTimeLocal } from "@/lib/format";
@@ -18,10 +19,29 @@ export const dynamic = "force-dynamic";
 
 const LIVE = [TicketStatus.ISSUED, TicketStatus.CHECKED_IN, TicketStatus.BLOCKED];
 
-type Props = { params: Promise<{ eventId: string }> };
+/** Ordered the way an event is actually set up. */
+const TABS = [
+  { label: "Details", value: "details" },
+  { label: "Ticket types", value: "tickets" },
+  { label: "Questions", value: "forms" },
+  { label: "Hosts", value: "hosts" },
+  { label: "Guest passes", value: "passes" },
+  { label: "Scanners", value: "scanners" },
+] as const;
 
-export default async function EditEventPage({ params }: Props) {
-  const user = await requireRole([Role.ORGANIZER, Role.ADMIN]);
+type Props = {
+  params: Promise<{ eventId: string }>;
+  searchParams: Promise<{ tab?: string }>;
+};
+
+export default async function EditEventPage({ params, searchParams }: Props) {
+  const [user, sp] = await Promise.all([
+    requireRole([Role.ORGANIZER, Role.ADMIN]),
+    searchParams,
+  ]);
+
+  // Unknown values fall back to Details rather than showing a blank page.
+  const tab = TABS.some((t) => t.value === sp.tab) ? sp.tab! : "details";
 
   const idResult = uuidSchema.safeParse((await params).eventId);
   if (!idResult.success) notFound();
@@ -43,6 +63,7 @@ export default async function EditEventPage({ params }: Props) {
         salesStartAt: true,
         salesEndAt: true,
         requiresStudentId: true,
+        requiresApproval: true,
         transferable: true,
         maxPerUser: true,
         paymentMode: true,
@@ -99,6 +120,15 @@ export default async function EditEventPage({ params }: Props) {
     }),
   ]);
 
+  const counts: Record<string, number | undefined> = {
+    details: undefined,
+    tickets: ticketTypes.length,
+    forms: ticketTypes.reduce((n, t) => n + t.customFields.length, 0),
+    hosts: hosts.length,
+    passes: vipPasses.length,
+    scanners: scanners.length,
+  };
+
   const rows: TicketTypeRow[] = ticketTypes.map((t) => ({
     id: t.id,
     name: t.name,
@@ -108,6 +138,7 @@ export default async function EditEventPage({ params }: Props) {
     salesStartAt: toDateTimeLocal(t.salesStartAt) || null,
     salesEndAt: toDateTimeLocal(t.salesEndAt) || null,
     requiresStudentId: t.requiresStudentId,
+    requiresApproval: t.requiresApproval,
     transferable: t.transferable,
     maxPerUser: t.maxPerUser,
     paymentMode: t.paymentMode,
@@ -134,7 +165,26 @@ export default async function EditEventPage({ params }: Props) {
         }
       />
 
+      {/* One job at a time. Everything below used to render on a single page —
+          details, ticket types, a form editor per ticket type, hosts, passes
+          and scanners — which is a wall of controls to scroll past to reach the
+          one you came for. The tab lives in the URL, so a section can be
+          bookmarked or linked to a co-organizer, and Back returns to it. */}
+      <div className="mb-6">
+        <FilterChips
+          label="Event settings sections"
+          basePath={`/organizer/events/${event.id}/edit`}
+          param="tab"
+          current={tab}
+          options={TABS.map((t) => ({
+            label: counts[t.value] === undefined ? t.label : `${t.label} (${counts[t.value]})`,
+            value: t.value,
+          }))}
+        />
+      </div>
+
       <div className="space-y-10">
+        {tab === "details" ? (
         <EventForm
           issuedTickets={issuedTickets}
           initial={{
@@ -158,12 +208,27 @@ export default async function EditEventPage({ params }: Props) {
             contactPhone: event.contactPhone ?? "",
           }}
         />
+        ) : null}
 
-        <TicketTypesEditor eventId={event.id} ticketTypes={rows} eventCapacity={event.capacity} />
+        {tab === "tickets" ? (
+          <TicketTypesEditor eventId={event.id} ticketTypes={rows} eventCapacity={event.capacity} />
+        ) : null}
 
         {/* What each ticket type asks its buyers. One panel per type,
             because a VIP pass rarely needs what a student pass does. */}
-        {ticketTypes.map((t) => (
+        {tab === "forms" && ticketTypes.length === 0 ? (
+          <EmptyState
+            title="No ticket types yet"
+            description="Add a ticket type first — the questions you ask belong to a specific one."
+            action={
+              <ButtonLink href={`/organizer/events/${event.id}/edit?tab=tickets`}>
+                Add a ticket type
+              </ButtonLink>
+            }
+          />
+        ) : null}
+
+        {tab === "forms" ? ticketTypes.map((t) => (
           <RegistrationFormEditor
             key={t.id}
             ticketTypeId={t.id}
@@ -183,10 +248,11 @@ export default async function EditEventPage({ params }: Props) {
               })),
             }}
           />
-        ))}
+        )) : null}
 
-        <HostsEditor eventId={event.id} hosts={hosts as HostRow[]} />
+        {tab === "hosts" ? <HostsEditor eventId={event.id} hosts={hosts as HostRow[]} /> : null}
 
+        {tab === "passes" ? (
         <VipPassesEditor
           eventId={event.id}
           passes={vipPasses.map((p): VipPassRow => ({
@@ -198,7 +264,9 @@ export default async function EditEventPage({ params }: Props) {
             usedAt: p.usedAt ? formatDateTime(p.usedAt) : null,
           }))}
         />
+        ) : null}
 
+        {tab === "scanners" ? (
         <ScannersEditor
           eventId={event.id}
           scanners={scanners.map((row): ScannerRow => ({
@@ -208,6 +276,7 @@ export default async function EditEventPage({ params }: Props) {
             assignedBy: row.assignedBy.fullName,
           }))}
         />
+        ) : null}
       </div>
     </>
   );

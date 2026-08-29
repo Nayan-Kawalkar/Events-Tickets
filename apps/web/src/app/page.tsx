@@ -91,6 +91,7 @@ export default async function HomePage() {
     // own so the section stays a to-do list rather than a history.
     user
       ? prisma.ticket.findMany({
+      relationLoadStrategy: "join",
         where: {
           ownerUserId: user.id,
           status: { in: LIVE_TICKET_STATUS_LIST },
@@ -168,6 +169,7 @@ export default async function HomePage() {
                       <h3 className="truncate font-medium text-slate-900">
                         <Link
                           href={`/events/${event.slug}`}
+                          prefetch
                           className="transition-colors after:absolute after:inset-0 hover:text-brand-300"
                         >
                           {event.title}
@@ -280,6 +282,7 @@ export default async function HomePage() {
                     <h3 className="truncate font-medium text-slate-700">
                       <Link
                         href={`/events/${event.slug}`}
+                          prefetch
                         className="transition-colors after:absolute after:inset-0 hover:text-brand-300"
                       >
                         {event.title}
@@ -362,7 +365,8 @@ function FeaturedEvent({ event }: { event: EventRow }) {
             </div>
 
             <h2 id="featured" className="text-display text-slate-900">
-              <Link href={`/events/${event.slug}`} className="transition-colors hover:text-brand-300">
+              <Link href={`/events/${event.slug}`}
+                          prefetch className="transition-colors hover:text-brand-300">
                 {event.title}
               </Link>
             </h2>
@@ -387,7 +391,8 @@ function FeaturedEvent({ event }: { event: EventRow }) {
             </dl>
 
             <div className="pt-1">
-              <ButtonLink href={`/events/${event.slug}`}>View event</ButtonLink>
+              <ButtonLink href={`/events/${event.slug}`}
+                          prefetch>View event</ButtonLink>
             </div>
           </div>
         </div>
@@ -411,6 +416,7 @@ function EventCard({ event }: { event: EventRow }) {
           {/* Stretched link: the whole card is clickable, focus still lands on the title. */}
           <Link
             href={`/events/${event.slug}`}
+                          prefetch
             className="transition-colors after:absolute after:inset-0 hover:text-brand-300"
           >
             {event.title}

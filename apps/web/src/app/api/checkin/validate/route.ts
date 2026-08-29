@@ -51,7 +51,14 @@ export async function POST(request: Request) {
 
     // 200 with a REJECTED body: the request succeeded, the ticket did not.
     // The scanner UI treats this as a normal outcome, not a network error.
-    return ok({ status: "REJECTED", reason: result.reason, message: result.message });
+    return ok({
+      status: "REJECTED",
+      reason: result.reason,
+      message: result.message,
+      // Only ever set for WRONG_EVENT, and only for a scanner already
+      // entitled to that event — it names nothing they could not see anyway.
+      ...(result.ticketEvent ? { ticketEvent: result.ticketEvent } : {}),
+    });
   } catch (err) {
     return serverError("checkin validate", err);
   }

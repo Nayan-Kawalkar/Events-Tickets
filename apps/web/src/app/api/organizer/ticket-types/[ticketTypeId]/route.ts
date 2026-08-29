@@ -104,6 +104,9 @@ export async function PATCH(request: Request, { params }: Params) {
         ...(input.requiresStudentId !== undefined
           ? { requiresStudentId: input.requiresStudentId as boolean }
           : {}),
+        ...(input.requiresApproval !== undefined
+          ? { requiresApproval: input.requiresApproval as boolean }
+          : {}),
         ...(input.transferable !== undefined ? { transferable: input.transferable as boolean } : {}),
         ...(input.maxPerUser !== undefined ? { maxPerUser: input.maxPerUser as number } : {}),
         ...(input.paymentMode !== undefined ? { paymentMode: input.paymentMode as typeof ticketType.paymentMode } : {}),

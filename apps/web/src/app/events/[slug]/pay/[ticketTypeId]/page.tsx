@@ -36,16 +36,22 @@ export default async function ManualPayPage({ params }: Props) {
         organizerUpiName: true,
         organizerUpiQrUploadId: true,
         requiresStudentId: true,
+      requiresApproval: true,
         event: { select: { id: true, slug: true, title: true, status: true } },
       },
     }),
   ]);
 
-  // Only reachable for a manual-UPI type on this event's page.
+  // Two kinds of claim land here: a UPI payment to be verified, and a free
+  // seat an organizer approves by hand. Both wait in the same queue; only the
+  // wording and the payment panel differ.
+  const approvalOnly =
+    ticketType?.pricePaise === 0 && ticketType?.requiresApproval === true;
+
   if (
     !ticketType ||
     ticketType.event.slug !== slug ||
-    ticketType.paymentMode !== PaymentMode.MANUAL_UPI ||
+    (ticketType.paymentMode !== PaymentMode.MANUAL_UPI && !approvalOnly) ||
     ticketType.event.status !== EventStatus.PUBLISHED
   ) {
     notFound();
@@ -71,15 +77,16 @@ export default async function ManualPayPage({ params }: Props) {
   return (
     <div className="mx-auto max-w-xl">
       <PageHeader
-        title={`Pay ${amount}`}
+        title={approvalOnly ? "Request a seat" : `Pay ${amount}`}
         description={`${ticketType.event.title} · ${ticketType.name}`}
       />
 
       {existing ? (
         <div className="mb-4">
           <Alert tone="info">
-            You already have a payment awaiting verification for this ticket. You do not need to
-            pay again —{" "}
+            {approvalOnly
+              ? "You already have a request waiting for the organizer. There is no need to send another — "
+              : "You already have a payment awaiting verification for this ticket. You do not need to pay again — "}
             <Link href="/payments" className="font-medium underline">
               check its status
             </Link>
@@ -89,6 +96,16 @@ export default async function ManualPayPage({ params }: Props) {
       ) : null}
 
       <div className="space-y-5">
+        {approvalOnly ? (
+          <Card className="space-y-2">
+            <h2 className="text-eyebrow">This seat is free — but approved by hand</h2>
+            <p className="text-sm text-slate-600">
+              The organizer checks each request before issuing a ticket, so this event stays
+              limited to the people it is meant for. Send your details below and you will see
+              the result on your home page. Nothing is charged.
+            </p>
+          </Card>
+        ) : (
         <Card className="space-y-4">
           <h2 className="text-eyebrow">Step 1 — Pay by UPI</h2>
 
@@ -167,16 +184,19 @@ export default async function ManualPayPage({ params }: Props) {
             will be rejected.
           </p>
         </Card>
+        )}
 
-        <Card className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-            Step 2 — Send us the proof
-          </h2>
-          <p className="text-sm text-slate-600">
-            After paying, enter the UPI reference number and upload the screenshot from your
-            payment app.
-          </p>
-        </Card>
+        {approvalOnly ? null : (
+          <Card className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Step 2 — Send us the proof
+            </h2>
+            <p className="text-sm text-slate-600">
+              After paying, enter the UPI reference number and upload the screenshot from your
+              payment app.
+            </p>
+          </Card>
+        )}
 
         <ManualPaymentForm
           eventId={ticketType.event.id}
