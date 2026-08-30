@@ -452,7 +452,15 @@ async function run() {
   const page = (p, cookie) => fetch(BASE + p, { headers: cookie ? { Cookie: `ct_session=${cookie}` } : {}, redirect: "manual" }).then(async (r) => ({ code: r.status, html: await r.text() }));
   await expect("pages", "public events page renders", () => page("/"), (r) => r.code === 200 && r.html.includes("Upcoming events"));
   await expect("pages", "draft events hidden from public", () => page("/"), (r) => !r.html.includes("ZZ Second Event"));
-  await expect("pages", "unknown event slug is 404", () => page("/events/does-not-exist-zz"), (r) => r.code === 404);
+  // A loading.tsx on /events/[slug] flushes the shell before notFound() runs,
+  // so the status is 200 — the same trade already made on /tickets, taken here
+  // because a blocking navigation left the URL frozen on every event click.
+  // What must still hold is that an unknown slug shows the not-found page and
+  // invents no event.
+  await expect("pages", "unknown event slug shows not found", () => page("/events/does-not-exist-zz"),
+    // "Register" also appears in the site meta description, so the real test
+    // is that no ticket-type registration link was rendered for a missing event.
+    (r) => /could not be found|not found|404/i.test(r.html) && !r.html.includes("/register/"));
   await expect("pages", "signed-out /tickets redirects", () => page("/tickets"), (r) => r.code === 307 || r.code === 302);
   await expect("pages", "student sees no admin data", () => page("/admin", cookies.s1),
     (r) => !r.html.includes("Needs attention") && !r.html.includes("Recent gate scans"));

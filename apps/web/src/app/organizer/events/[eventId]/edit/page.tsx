@@ -7,7 +7,7 @@ import { ScannersEditor, type ScannerRow } from "@/components/scanners-editor";
 import { VipPassesEditor, type VipPassRow } from "@/components/vip-passes-editor";
 import { TicketTypesEditor, type TicketTypeRow } from "@/components/ticket-types-editor";
 import { RegistrationFormEditor } from "@/components/registration-form-editor";
-import { FilterChips } from "@/components/list-controls";
+import { SectionTabs } from "@/components/section-tabs";
 import { ButtonLink, EmptyState, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { findManageableEvent } from "@/lib/authz";
@@ -165,119 +165,134 @@ export default async function EditEventPage({ params, searchParams }: Props) {
         }
       />
 
-      {/* One job at a time. Everything below used to render on a single page —
-          details, ticket types, a form editor per ticket type, hosts, passes
-          and scanners — which is a wall of controls to scroll past to reach the
-          one you came for. The tab lives in the URL, so a section can be
-          bookmarked or linked to a co-organizer, and Back returns to it. */}
-      <div className="mb-6">
-        <FilterChips
-          label="Event settings sections"
-          basePath={`/organizer/events/${event.id}/edit`}
-          param="tab"
-          current={tab}
-          options={TABS.map((t) => ({
-            label: counts[t.value] === undefined ? t.label : `${t.label} (${counts[t.value]})`,
-            value: t.value,
-          }))}
-        />
-      </div>
-
-      <div className="space-y-10">
-        {tab === "details" ? (
-        <EventForm
-          issuedTickets={issuedTickets}
-          initial={{
-            id: event.id,
-            title: event.title,
-            slug: event.slug,
-            description: event.description ?? "",
-            venue: event.venue ?? "",
-            startsAt: toDateTimeLocal(event.startsAt),
-            endsAt: toDateTimeLocal(event.endsAt),
-            registrationOpensAt: toDateTimeLocal(event.registrationOpensAt),
-            registrationClosesAt: toDateTimeLocal(event.registrationClosesAt),
-            status: event.status,
-            capacity: event.capacity === null ? "" : String(event.capacity),
-            posterUploadId: event.posterUploadId ?? "",
-            hostOrganization: event.hostOrganization ?? "",
-            addressLine: event.addressLine ?? "",
-            latitude: event.latitude === null ? "" : String(event.latitude),
-            longitude: event.longitude === null ? "" : String(event.longitude),
-            contactEmail: event.contactEmail ?? "",
-            contactPhone: event.contactPhone ?? "",
-          }}
-        />
-        ) : null}
-
-        {tab === "tickets" ? (
-          <TicketTypesEditor eventId={event.id} ticketTypes={rows} eventCapacity={event.capacity} />
-        ) : null}
-
-        {/* What each ticket type asks its buyers. One panel per type,
-            because a VIP pass rarely needs what a student pass does. */}
-        {tab === "forms" && ticketTypes.length === 0 ? (
-          <EmptyState
-            title="No ticket types yet"
-            description="Add a ticket type first — the questions you ask belong to a specific one."
-            action={
-              <ButtonLink href={`/organizer/events/${event.id}/edit?tab=tickets`}>
-                Add a ticket type
-              </ButtonLink>
-            }
-          />
-        ) : null}
-
-        {tab === "forms" ? ticketTypes.map((t) => (
-          <RegistrationFormEditor
-            key={t.id}
-            ticketTypeId={t.id}
-            ticketTypeName={t.name}
-            initial={{
-              phoneMode: t.phoneMode,
-              rollNumberMode: t.rollNumberMode,
-              departmentMode: t.departmentMode,
-              fields: t.customFields.map((c) => ({
-                id: c.id,
-                label: c.label,
-                helpText: c.helpText ?? "",
-                placeholder: c.placeholder ?? "",
-                type: c.type,
-                required: c.required,
-                options: c.options,
-              })),
-            }}
-          />
-        )) : null}
-
-        {tab === "hosts" ? <HostsEditor eventId={event.id} hosts={hosts as HostRow[]} /> : null}
-
-        {tab === "passes" ? (
-        <VipPassesEditor
-          eventId={event.id}
-          passes={vipPasses.map((p): VipPassRow => ({
-            id: p.id,
-            code: p.code,
-            guestName: p.guestName,
-            note: p.note,
-            status: p.status,
-            usedAt: p.usedAt ? formatDateTime(p.usedAt) : null,
-          }))}
-        />
-        ) : null}
-
-        {tab === "scanners" ? (
-        <ScannersEditor
-          eventId={event.id}
-          scanners={scanners.map((row): ScannerRow => ({
-            id: row.id,
-            gateId: row.gateId,
-            user: row.user,
-            assignedBy: row.assignedBy.fullName,
-          }))}
-        />
-        ) : null}
-      </div>
+      {/* Everything below used to render on a single page — details, ticket
+          types, a form editor per ticket type, hosts, passes and scanners.
+          Sections are rendered by the server in this one response and
+          switched on the client, so choosing one is instant rather than a
+          round trip that leaves the URL and the screen frozen. */}
+      <SectionTabs
+        label="Event settings sections"
+        initial={tab}
+        sections={[
+          {
+            value: "details",
+            label: "Details",
+            content: (
+              <EventForm
+                issuedTickets={issuedTickets}
+                initial={{
+                  id: event.id,
+                  title: event.title,
+                  slug: event.slug,
+                  description: event.description ?? "",
+                  venue: event.venue ?? "",
+                  startsAt: toDateTimeLocal(event.startsAt),
+                  endsAt: toDateTimeLocal(event.endsAt),
+                  registrationOpensAt: toDateTimeLocal(event.registrationOpensAt),
+                  registrationClosesAt: toDateTimeLocal(event.registrationClosesAt),
+                  status: event.status,
+                  capacity: event.capacity === null ? "" : String(event.capacity),
+                  posterUploadId: event.posterUploadId ?? "",
+                  hostOrganization: event.hostOrganization ?? "",
+                  addressLine: event.addressLine ?? "",
+                  latitude: event.latitude === null ? "" : String(event.latitude),
+                  longitude: event.longitude === null ? "" : String(event.longitude),
+                  contactEmail: event.contactEmail ?? "",
+                  contactPhone: event.contactPhone ?? "",
+                }}
+              />
+            ),
+          },
+          {
+            value: "tickets",
+            label: "Ticket types",
+            count: counts.tickets,
+            content: (
+              <TicketTypesEditor
+                eventId={event.id}
+                ticketTypes={rows}
+                eventCapacity={event.capacity}
+              />
+            ),
+          },
+          {
+            value: "forms",
+            label: "Questions",
+            count: counts.forms,
+            content:
+              ticketTypes.length === 0 ? (
+                <EmptyState
+                  title="No ticket types yet"
+                  description="Add a ticket type first — the questions you ask belong to a specific one."
+                />
+              ) : (
+                <div className="space-y-10">
+                  {ticketTypes.map((t) => (
+                    <RegistrationFormEditor
+                      key={t.id}
+                      ticketTypeId={t.id}
+                      ticketTypeName={t.name}
+                      initial={{
+                        phoneMode: t.phoneMode,
+                        rollNumberMode: t.rollNumberMode,
+                        departmentMode: t.departmentMode,
+                        fields: t.customFields.map((c) => ({
+                          id: c.id,
+                          label: c.label,
+                          helpText: c.helpText ?? "",
+                          placeholder: c.placeholder ?? "",
+                          type: c.type,
+                          required: c.required,
+                          options: c.options,
+                        })),
+                      }}
+                    />
+                  ))}
+                </div>
+              ),
+          },
+          {
+            value: "hosts",
+            label: "Hosts",
+            count: counts.hosts,
+            content: <HostsEditor eventId={event.id} hosts={hosts as HostRow[]} />,
+          },
+          {
+            value: "passes",
+            label: "Guest passes",
+            count: counts.passes,
+            content: (
+              <VipPassesEditor
+                eventId={event.id}
+                passes={vipPasses.map((p): VipPassRow => ({
+                  id: p.id,
+                  code: p.code,
+                  guestName: p.guestName,
+                  note: p.note,
+                  status: p.status,
+                  usedAt: p.usedAt ? formatDateTime(p.usedAt) : null,
+                }))}
+              />
+            ),
+          },
+          {
+            value: "scanners",
+            label: "Scanners",
+            count: counts.scanners,
+            content: (
+              <ScannersEditor
+                eventId={event.id}
+                scanners={scanners.map((row): ScannerRow => ({
+                  id: row.id,
+                  gateId: row.gateId,
+                  user: row.user,
+                  assignedBy: row.assignedBy.fullName,
+                }))}
+              />
+            ),
+          },
+        ]}
+      />
     </>
   );
 }

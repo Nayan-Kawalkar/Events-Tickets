@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { SiteFooter } from "@/components/site-footer";
+import { ServiceWorker } from "@/components/service-worker";
 import { SiteHeader } from "@/components/site-header";
 import { BottomNav } from "@/components/site-nav";
 import { ToastProvider } from "@/components/toast";
@@ -26,12 +27,34 @@ export const metadata: Metadata = {
     template: "%s · College Events",
   },
   description: "Register for college events and carry your ticket on your phone.",
+
+  // iOS ignores the manifest for these two, so they have to be declared as
+  // meta tags or an iPhone install opens in a browser tab instead of its own
+  // window, with no icon of its own.
+  appleWebApp: {
+    capable: true,
+    title: "CampusPass",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+
+  // Next emits the modern "mobile-web-app-capable", but older iOS only reads
+  // the Apple-prefixed name — without it an iPhone install opens in Safari
+  // chrome rather than its own window.
+  other: { "apple-mobile-web-app-capable": "yes" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: "#041413",
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +63,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <body className="flex min-h-dvh flex-col">
+        <ServiceWorker />
         <ToastProvider>
           <a
             href="#main"
