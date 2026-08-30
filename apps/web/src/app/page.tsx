@@ -152,7 +152,7 @@ export default async function HomePage() {
             </ButtonLink>
           </div>
 
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {hosted.map((event) => (
               <li key={`host-${event.id}`}>
                 <article className="spotlight card-interactive group relative flex h-full gap-3 overflow-hidden rounded-xl border border-brand-500/30 bg-[#09201e]/90 p-3 shadow-lg shadow-black/40">
@@ -247,7 +247,7 @@ export default async function HomePage() {
           <h2 id="more-events" className="text-display mb-5 text-slate-900">
             More events
           </h2>
-          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {rest.map((event) => (
               <li key={event.id}>
                 <EventCard event={event} />
@@ -266,7 +266,7 @@ export default async function HomePage() {
             Finished. Kept here for the record — registration is closed.
           </p>
 
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {pastEvents.map((event) => (
               <li key={event.id}>
                 <article className="spotlight group relative flex h-full gap-3 overflow-hidden rounded-xl border border-white/8 bg-[#09201e]/60 p-3">

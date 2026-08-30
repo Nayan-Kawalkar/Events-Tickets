@@ -81,6 +81,13 @@ export function ScannerClient({
   const processingRef = useRef(false);
   const resultShownRef = useRef(false);
 
+  // The selected event and gate belong here for the same reason. The camera
+  // callback is created when scanning starts and keeps whatever `submit` it
+  // captured then — so changing the dropdown updated the banner but every
+  // scan still went to the event that was selected when the camera started.
+  const eventIdRef = useRef(eventId);
+  const gateIdRef = useRef(gateId);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const lastCodeRef = useRef<{ code: string; at: number } | null>(null);
@@ -88,6 +95,14 @@ export function ScannerClient({
   // rather than asking the attendee to present the ticket a second time.
   const lastPayloadRef = useRef<string | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    eventIdRef.current = eventId;
+  }, [eventId]);
+
+  useEffect(() => {
+    gateIdRef.current = gateId;
+  }, [gateId]);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -172,7 +187,7 @@ export function ScannerClient({
     // because switching events and resubmitting happens in the same tick, and
     // the state update is not visible yet.
     async (payload: string, forEventId?: string) => {
-      const targetEventId = forEventId ?? eventId;
+      const targetEventId = forEventId ?? eventIdRef.current;
       if (!targetEventId || processingRef.current) return;
       lastPayloadRef.current = payload;
       processingRef.current = true;
@@ -186,7 +201,7 @@ export function ScannerClient({
         fetch("/api/checkin/validate", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ eventId: targetEventId, gateId, qrPayload: payload }),
+          body: JSON.stringify({ eventId: targetEventId, gateId: gateIdRef.current, qrPayload: payload }),
           keepalive: true,
           // A gate cannot wait on a socket that will never answer. Without a
           // deadline a stalled request hangs the scanner indefinitely and the
@@ -263,7 +278,7 @@ export function ScannerClient({
         // frame, and must not be resubmitted the moment the panel clears.
       }, RESET_MS);
     },
-    [eventId, gateId, signal],
+    [signal],
   );
 
   /**
@@ -277,6 +292,9 @@ export function ScannerClient({
   const switchEventAndRetry = useCallback(
     (targetEventId: string) => {
       const payload = lastPayloadRef.current;
+      // Set the ref as well as the state: the resubmit below happens in this
+      // same tick, before the effect that syncs it has had a chance to run.
+      eventIdRef.current = targetEventId;
       setEventId(targetEventId);
 
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
@@ -446,7 +464,7 @@ export function ScannerClient({
       </div>
 
       <Card className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="event" className="mb-1.5 block text-sm font-medium text-slate-800">
               Event

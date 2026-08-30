@@ -153,7 +153,7 @@ export function RegisterForm({ next }: { next: string }) {
         />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Roll number" htmlFor="rollNumber" error={fields.rollNumber} hint="Required for student-only events.">
           <TextInput id="rollNumber" name="rollNumber" error={fields.rollNumber} />
         </Field>

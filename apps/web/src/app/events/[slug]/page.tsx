@@ -199,7 +199,7 @@ export default async function EventDetailPage({ params }: Props) {
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-[1.6fr_1fr] lg:grid-cols-[2fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[1.6fr_1fr] lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
           <Card>
             <h2 className="text-eyebrow">About</h2>

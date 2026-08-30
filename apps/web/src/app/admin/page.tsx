@@ -171,7 +171,7 @@ export default async function AdminOverviewPage() {
         </section>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section aria-labelledby="activity">
           <div className="mb-3 flex items-center justify-between">
             <h2 id="activity" className="text-display text-slate-900">

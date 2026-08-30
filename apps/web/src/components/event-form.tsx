@@ -217,7 +217,7 @@ export function EventForm({
               />
             </Field>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field
                 label="Latitude"
                 htmlFor="latitude"
@@ -252,7 +252,7 @@ export function EventForm({
           <p className="mb-3 text-xs text-slate-500">
             Shown publicly so attendees can reach you before the event.
           </p>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Contact email" htmlFor="contactEmail" error={fields.contactEmail}>
               <TextInput
                 id="contactEmail"
@@ -274,7 +274,7 @@ export function EventForm({
           </div>
         </fieldset>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Starts at" htmlFor="startsAt" error={fields.startsAt} required>
             <TextInput
               id="startsAt"
@@ -315,7 +315,7 @@ export function EventForm({
           </Field>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Status" htmlFor="status" error={fields.status} required>
             <Select id="status" value={values.status} error={fields.status} onChange={(e) => set("status", e.target.value as EventStatus)}>
               {Object.values(EventStatus).map((status) => (

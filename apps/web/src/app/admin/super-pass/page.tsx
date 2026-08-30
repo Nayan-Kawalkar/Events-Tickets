@@ -67,7 +67,7 @@ export default async function SuperPassPage() {
         </Alert>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.2fr]">
         <section aria-labelledby="current">
           <h2 id="current" className="text-display mb-3 text-slate-900">
             Current pass

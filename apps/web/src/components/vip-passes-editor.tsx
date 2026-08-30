@@ -163,7 +163,7 @@ export function VipPassesEditor({ eventId, passes }: { eventId: string; passes: 
         <form onSubmit={issue} className="space-y-4" noValidate>
           {message ? <Alert>{message}</Alert> : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Guest name" htmlFor="vip-name" error={fields.guestName} required>
               <TextInput id="vip-name" name="guestName" required error={fields.guestName} />
             </Field>

@@ -95,7 +95,7 @@ export function HostControls({
         ))}
       </dl>
 
-      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {actions.map((action) => (
           <li key={action.href}>
             <Link

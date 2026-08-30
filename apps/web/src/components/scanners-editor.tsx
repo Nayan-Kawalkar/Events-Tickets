@@ -102,7 +102,7 @@ export function ScannersEditor({ eventId, scanners }: { eventId: string; scanner
         <form onSubmit={assign} className="space-y-4" noValidate>
           {message ? <Alert>{message}</Alert> : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Volunteer's email"
               htmlFor="scanner-email"

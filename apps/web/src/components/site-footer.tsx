@@ -9,7 +9,7 @@ export function SiteFooter() {
     // Extra bottom padding clears the fixed mobile bottom bar.
     <footer className="mt-auto border-t border-white/6 pb-20 md:pb-0">
       <div className="mx-auto w-full max-w-6xl px-4 py-10">
-        <div className="grid gap-8 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           <div>
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               About

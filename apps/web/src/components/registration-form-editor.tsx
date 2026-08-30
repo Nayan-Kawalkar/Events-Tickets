@@ -229,7 +229,7 @@ export function RegistrationFormEditor({
           </p>
         ) : null}
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {BUILT_INS.map(({ key, label }) => (
             <Field key={key} label={label} htmlFor={`${ticketTypeId}-${key}`}>
               <Select
@@ -268,7 +268,7 @@ export function RegistrationFormEditor({
             <ul className="mt-4 space-y-4">
               {config.fields.map((field, index) => (
                 <li key={field.id ?? `new-${index}`} className="rounded-xl border border-white/8 p-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label={`Question ${index + 1}`} htmlFor={`${ticketTypeId}-label-${index}`}>
                       <TextInput
                         id={`${ticketTypeId}-label-${index}`}
@@ -293,7 +293,7 @@ export function RegistrationFormEditor({
                     </Field>
                   </div>
 
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field
                       label="Help text"
                       htmlFor={`${ticketTypeId}-help-${index}`}

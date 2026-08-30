@@ -72,7 +72,7 @@ export function CreateUserForm() {
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {message ? <Alert>{message}</Alert> : null}
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Full name" htmlFor="new-name" error={fields.fullName} required>
             <TextInput id="new-name" name="fullName" required error={fields.fullName} />
           </Field>
