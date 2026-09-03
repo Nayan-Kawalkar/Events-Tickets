@@ -104,8 +104,15 @@ export default async function AttendeesPage({ params, searchParams }: Props) {
               Event
             </ButtonLink>
             {/* Full-page navigation so the browser handles the file download. */}
-            <ButtonLink href={`/organizer/events/${event.id}/attendees/export`} prefetch={false}>
-              Export CSV
+            <ButtonLink href={`/organizer/events/${event.id}/attendees/export/xlsx`} prefetch={false}>
+              Export Excel
+            </ButtonLink>
+            <ButtonLink
+              href={`/organizer/events/${event.id}/attendees/export`}
+              variant="secondary"
+              prefetch={false}
+            >
+              CSV
             </ButtonLink>
           </div>
         }

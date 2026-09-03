@@ -10,9 +10,12 @@ import {
   LocationCard,
 } from "@/components/event-details";
 import { Poster } from "@/components/poster";
+import { ShareEvent } from "@/components/share-event";
 import { Alert, ButtonLink, Card, EventStatusBadge, PageHeader } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageEvent } from "@/lib/authz";
+import QRCode from "qrcode";
+import { env } from "@/lib/env";
 import { getEventBySlug } from "@/lib/event-cache";
 import { effectiveStatus } from "@/lib/event-status";
 import { formatDateTime, formatPrice } from "@/lib/format";
@@ -48,6 +51,17 @@ export default async function EventDetailPage({ params }: Props) {
     status === EventStatus.CLOSED ||
     status === EventStatus.COMPLETED;
   if (!publiclyVisible && !isHost) notFound();
+
+  // Absolute, because this link is meant to leave the site.
+  const shareUrl = new URL(`/events/${event.slug}`, env.APP_URL).toString();
+  const shareQr = await QRCode.toDataURL(shareUrl, {
+    errorCorrectionLevel: "M",
+    // Quiet zone in modules: a QR printed on a poster needs clear space
+    // around it or phone cameras struggle to lock on.
+    margin: 2,
+    width: 512,
+    color: { dark: "#0f172a", light: "#ffffff" },
+  });
 
   const now = new Date();
 
@@ -155,15 +169,28 @@ export default async function EventDetailPage({ params }: Props) {
             sizes="100vw"
             className="rounded-none"
           />
-          <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
+          {/* The poster scrim alone is not enough over bright artwork, so the
+              text block carries its own gradient base. */}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-5 pt-20 sm:p-7 sm:pt-24">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <EventStatusBadge status={status} />
               {event.hostOrganization ? (
-                <span className="text-xs font-medium text-brand-300">{event.hostOrganization}</span>
+                <span className="text-xs font-medium text-brand-300 drop-shadow">{event.hostOrganization}</span>
               ) : null}
-              {event.venue ? <span className="text-xs text-slate-700">{event.venue}</span> : null}
+              {event.venue ? (
+                <span className="text-xs font-medium text-white/85 drop-shadow">{event.venue}</span>
+              ) : null}
             </div>
-            <h1 className="text-display-lg text-slate-900 drop-shadow-lg">{event.title}</h1>
+            <h1 className="text-display-lg text-white drop-shadow-lg">{event.title}</h1>
+
+            <div className="mt-4">
+              <ShareEvent
+                url={shareUrl}
+                title={event.title}
+                venue={event.venue}
+                qrDataUrl={shareQr}
+              />
+            </div>
           </div>
         </div>
       </section>

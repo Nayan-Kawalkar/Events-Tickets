@@ -63,12 +63,14 @@ export function Poster({
         fill
         sizes={sizes}
         priority={priority}
-        className="media-reveal object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+        className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
       />
-      {/* Keeps overlaid text legible whatever the poster looks like. */}
+      {/* Keeps overlaid text legible whatever the poster looks like. Weighted
+          towards the bottom, where the title and badges sit, and strong enough
+          to work over a poster that is mostly white. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"
+        className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/5"
       />
     </div>
   );

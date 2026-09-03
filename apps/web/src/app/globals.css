@@ -142,17 +142,6 @@ body {
   box-shadow: 0 20px 45px rgba(43, 220, 163, 0.12);
 }
 
-/* Media desaturates until hovered, as in the reference. */
-.media-reveal {
-  filter: grayscale(100%) contrast(1.05);
-  transition: filter 0.35s ease;
-}
-
-.spotlight:hover .media-reveal,
-.media-reveal:hover {
-  filter: grayscale(0%);
-}
-
 /* Underline that grows from the left on hover. */
 .link-underline {
   position: relative;

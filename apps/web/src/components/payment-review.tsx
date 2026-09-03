@@ -75,7 +75,7 @@ export function PaymentReviewCard({ payment }: { payment: PendingPayment }) {
           <img
             src={`/api/uploads/${payment.screenshotUploadId}`}
             alt={`Payment screenshot from ${payment.payer.name}`}
-            className="media-reveal max-h-56 w-full rounded-lg bg-black/30 object-contain ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.01] sm:max-h-72"
+            className="max-h-56 w-full rounded-lg bg-black/30 object-contain ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.01] sm:max-h-72"
           />
           <span className="mt-1.5 block text-xs text-brand-400 underline-offset-2 hover:underline">
             Open full size

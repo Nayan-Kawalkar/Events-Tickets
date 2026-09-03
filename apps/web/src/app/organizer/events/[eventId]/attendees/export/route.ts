@@ -1,10 +1,10 @@
-import { prisma, Role } from "@ct/db";
+import { Role } from "@ct/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canAccessOrganizerArea, findManageableEvent } from "@/lib/authz";
 import { audit } from "@/lib/audit";
 import { fail, forbidden, notFound, unauthorized } from "@/lib/api";
 import { toCsv } from "@/lib/format";
-import { storedAnswers } from "@/lib/attendee-fields";
+import { buildAttendeeExport } from "@/lib/attendee-export";
 import { uuidSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -23,72 +23,13 @@ export async function GET(_request: Request, { params }: Params) {
   const event = await findManageableEvent(user, idResult.data);
   if (!event) return notFound();
 
-  const tickets = await prisma.ticket.findMany({
-    where: { eventId: event.id },
-    orderBy: { issuedAt: "asc" },
-    select: {
-      publicId: true,
-      status: true,
-      issuedAt: true,
-      checkedInAt: true,
-      attendeeName: true,
-      attendeeEmail: true,
-      attendeePhone: true,
-      attendeeRollNumber: true,
-      attendeeDepartment: true,
-      termsAcceptedAt: true,
-      customAnswers: true,
-      owner: { select: { fullName: true, email: true, rollNumber: true, department: true } },
-      ticketType: { select: { name: true, pricePaise: true } },
-    },
-  });
+  const { headers, rows, count } = await buildAttendeeExport(event.id);
 
-  // One column per question, built from the answers actually present. Labels
-  // are read from the tickets rather than the current questions, so answers to
-  // a question since deleted still export instead of vanishing.
-  const answersByTicket = tickets.map((t) => storedAnswers(t.customAnswers));
-  const questionLabels: string[] = [];
-  for (const answers of answersByTicket) {
-    for (const a of answers) {
-      if (!questionLabels.includes(a.label)) questionLabels.push(a.label);
-    }
-  }
-
+  // Same columns as the Excel export; only the encoding differs. Dates are
+  // ISO here because a CSV is usually being fed to another program.
   const csv = toCsv([
-    [
-      "ticket_public_id",
-      "attendee_name",
-      "email",
-      "phone",
-      "roll_number",
-      "department",
-      "account_email",
-      "terms_accepted_at",
-      "ticket_type",
-      "price_paise",
-      "status",
-      "issued_at",
-      "checked_in_at",
-      ...questionLabels,
-    ],
-    ...tickets.map((t, i) => [
-      t.publicId,
-      t.attendeeName ?? t.owner.fullName,
-      t.attendeeEmail ?? t.owner.email,
-      t.attendeePhone ?? "",
-      t.attendeeRollNumber ?? t.owner.rollNumber ?? "",
-      t.attendeeDepartment ?? t.owner.department ?? "",
-      t.owner.email,
-      t.termsAcceptedAt?.toISOString() ?? "",
-      t.ticketType.name,
-      t.ticketType.pricePaise,
-      t.status,
-      t.issuedAt.toISOString(),
-      t.checkedInAt?.toISOString() ?? "",
-      ...questionLabels.map(
-        (label) => answersByTicket[i]?.find((a) => a.label === label)?.value ?? "",
-      ),
-    ]),
+    headers,
+    ...rows.map((row) => row.map((cell) => (cell instanceof Date ? cell.toISOString() : cell ?? ""))),
   ]);
 
   // Exporting personal data is an auditable action.
@@ -97,7 +38,7 @@ export async function GET(_request: Request, { params }: Params) {
     entityType: "Event",
     entityId: event.id,
     action: "ATTENDEES_EXPORTED",
-    metadata: { rowCount: tickets.length, actorRole: user.role === Role.ADMIN ? "ADMIN" : "ORGANIZER" },
+    metadata: { rowCount: count, format: "csv", actorRole: user.role === Role.ADMIN ? "ADMIN" : "ORGANIZER" },
   });
 
   const filename = `attendees-${event.slug}-${new Date().toISOString().slice(0, 10)}.csv`;
